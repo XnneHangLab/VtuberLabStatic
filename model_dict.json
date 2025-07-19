@@ -168,23 +168,14 @@
         "initialYshift": 0,
         "idleMotionGroupName": "idle",
         "emotionMap": {
-            "neutral": 0,
-            "coldness" : 1, 
-            "disgust" : 1,
-            "sad": 2,
-            "worry": 2,
-            "confusion": 3,
-            "anger": 4,
-            "surprise": 5,
-            "expectation": 5,
-            "joy": 6,
-            "excitement" : 7,
-            "pride": 8,
-            "shy" : 9,
-            "stunned" : 10,
-            "embarrassed" : 11,
-            "play_cool" : 12,
-            "drink_tea" : 13
+            "平静": 0,
+            "轻蔑" : 4, 
+            "质疑" : 1,
+            "开心" : 7,
+            "呆滞" : 10,
+            "担忧": 2,
+            "居高临下" : 13,
+            "害羞": 9
         }
     }
 ]
