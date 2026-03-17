@@ -177,5 +177,197 @@
             "居高临下" : 13,
             "害羞": 9
         }
+    },
+    {
+        "name": "薄巧_完整版_调用版",
+        "description": "薄巧完整版的调用配置版。复用原模型资源，不改原始模型文件；排除了飞头测试动作，也没有暴露水印相关快捷动作。",
+        "url": "/live2d-models/薄巧_完整版/薄巧_调用版.model3.json",
+        "kScale": 0.75,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "idleMotionGroupName": "Idle",
+        "defaultEmotion": "watermark_hidden",
+        "emotionMap": {
+            "neutral": "neutral",
+            "default": "neutral",
+            "中性": "neutral",
+            "默认": "neutral",
+            "预设发型1": "hair_preset_1",
+            "预设1": "hair_preset_1",
+            "预设发型2": "hair_preset_2",
+            "预设2": "hair_preset_2",
+            "隐藏双马尾": "hide_twintails",
+            "隐藏左马尾": "hide_left_twintail",
+            "隐藏右马尾": "hide_right_twintail",
+            "隐藏披发": "hide_loose_hair",
+            "隐藏批发": "hide_loose_hair",
+            "隐藏麻花辫侧发": "hide_side_braid",
+            "隐藏侧麻花": "hide_side_braid",
+            "叼面包": "bread",
+            "宕机": "crash",
+            "脸黑": "dark_face",
+            "脸红": "blush",
+            "委屈": "teary",
+            "左手比耶": "peace_left",
+            "右手比耶": "peace_right",
+            "双手比耶": "peace_both",
+            "抚脸": "touch_face",
+            "指脸": "point_face",
+            "反手比耶": "backhand_peace",
+            "猫咪贴纸": "cat_sticker",
+            "猫猫贴纸": "cat_sticker",
+            "生气贴纸": "angry_sticker",
+            "生气符号": "angry_sticker",
+            "问号贴纸": "question_sticker",
+            "问号": "question_sticker"
+        },
+        "expressionCatalog": [
+            {
+                "name": "hair_preset_1",
+                "label": "预设发型1",
+                "hotkey": "RCtrl+N1",
+                "file": "exp/发型组合预设1.exp3.json"
+            },
+            {
+                "name": "hair_preset_2",
+                "label": "预设发型2",
+                "hotkey": "RCtrl+N2",
+                "file": "exp/发型组合预设2.exp3.json"
+            },
+            {
+                "name": "hide_twintails",
+                "label": "隐藏双马尾",
+                "hotkey": "LCtrl+N1",
+                "file": "exp/01双马尾隐藏.exp3.json"
+            },
+            {
+                "name": "hide_left_twintail",
+                "label": "隐藏左马尾",
+                "hotkey": "LCtrl+N2",
+                "file": "exp/02左马尾隐藏.exp3.json"
+            },
+            {
+                "name": "hide_right_twintail",
+                "label": "隐藏右马尾",
+                "hotkey": "LCtrl+N3",
+                "file": "exp/03右马尾隐藏.exp3.json"
+            },
+            {
+                "name": "hide_loose_hair",
+                "label": "隐藏披发",
+                "hotkey": "LCtrl+N4",
+                "file": "exp/04批发隐藏.exp3.json"
+            },
+            {
+                "name": "hide_side_braid",
+                "label": "隐藏麻花辫侧发",
+                "hotkey": "LCtrl+N5",
+                "file": "exp/05侧麻花隐藏.exp3.json"
+            },
+            {
+                "name": "bread",
+                "label": "叼面包",
+                "hotkey": "LCtrl+N6",
+                "file": "exp/06叼面包.exp3.json"
+            },
+            {
+                "name": "crash",
+                "label": "宕机",
+                "hotkey": "LCtrl+N7",
+                "file": "exp/07宕机.exp3.json"
+            },
+            {
+                "name": "dark_face",
+                "label": "脸黑",
+                "hotkey": "LCtrl+N8",
+                "file": "exp/08脸黑.exp3.json"
+            },
+            {
+                "name": "blush",
+                "label": "脸红",
+                "hotkey": "LCtrl+N9",
+                "file": "exp/09脸红.exp3.json"
+            },
+            {
+                "name": "teary",
+                "label": "委屈",
+                "hotkey": "LCtrl+N0",
+                "file": "exp/10委屈.exp3.json"
+            },
+            {
+                "name": "peace_left",
+                "label": "左手比耶",
+                "hotkey": "LShift+N1",
+                "file": "exp/11左手比耶.exp3.json"
+            },
+            {
+                "name": "peace_right",
+                "label": "右手比耶",
+                "hotkey": "LShift+N2",
+                "file": "exp/12右手比耶.exp3.json"
+            },
+            {
+                "name": "peace_both",
+                "label": "双手比耶",
+                "hotkey": "LShift+N3",
+                "file": "exp/13双手比耶.exp3.json"
+            },
+            {
+                "name": "touch_face",
+                "label": "抚脸",
+                "hotkey": "LShift+N4",
+                "file": "exp/14抚脸.exp3.json"
+            },
+            {
+                "name": "point_face",
+                "label": "指脸",
+                "hotkey": "LShift+N5",
+                "file": "exp/15指脸.exp3.json"
+            },
+            {
+                "name": "backhand_peace",
+                "label": "反手比耶",
+                "hotkey": "LShift+N6",
+                "file": "exp/16反手比耶.exp3.json"
+            },
+            {
+                "name": "cat_sticker",
+                "label": "猫咪贴纸",
+                "hotkey": "LShift+N7",
+                "file": "exp/17猫猫贴纸.exp3.json"
+            },
+            {
+                "name": "angry_sticker",
+                "label": "生气贴纸",
+                "hotkey": "LShift+N8",
+                "file": "exp/18生气符号.exp3.json"
+            },
+            {
+                "name": "question_sticker",
+                "label": "问号贴纸",
+                "hotkey": "LShift+N9",
+                "file": "exp/19问号.exp3.json"
+            }
+        ],
+        "excludedExpressions": [
+            {
+                "label": "版权隐藏/去除水印",
+                "hotkey": "RShift+Space",
+                "file": "exp/00水印.exp3.json",
+                "reason": "未暴露为可调用别名"
+            },
+            {
+                "label": "飞头1",
+                "hotkey": "LShift+N0",
+                "file": "exp/20飞头1.exp3.json",
+                "reason": "测试动作，不计入调用版"
+            },
+            {
+                "label": "飞头2",
+                "hotkey": "RShift+N1",
+                "file": "exp/21飞头2.exp3.json",
+                "reason": "测试动作，不计入调用版"
+            }
+        ]
     }
 ]
