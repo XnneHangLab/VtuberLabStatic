@@ -185,7 +185,6 @@
         "kScale": 0.75,
         "initialXshift": 0,
         "initialYshift": 0,
-        "idleMotionGroupName": "Idle",
         "defaultEmotion": "watermark_hidden",
         "emotionMap": {
             "neutral": "neutral",
