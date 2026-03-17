@@ -113,7 +113,7 @@
         "emotionMap": {
             "neutral": 0,
             "anger": 2,
-            "disgust": 7,   
+            "disgust": 7,
             "fear": 3,
             "joy": 5,
             "sadness": 3,
@@ -169,19 +169,19 @@
         "idleMotionGroupName": "idle",
         "emotionMap": {
             "平静": 0,
-            "轻蔑" : 4, 
-            "质疑" : 1,
-            "开心" : 7,
-            "呆滞" : 10,
+            "轻蔑": 4,
+            "质疑": 1,
+            "开心": 7,
+            "呆滞": 10,
             "担忧": 2,
-            "居高临下" : 13,
+            "居高临下": 13,
             "害羞": 9
         }
     },
     {
         "name": "薄巧_完整版_调用版",
         "description": "薄巧完整版的调用配置版。复用原模型资源，不改原始模型文件；排除了飞头测试动作，也没有暴露水印相关快捷动作。",
-        "url": "/live2d-models/薄巧_完整版/薄巧_调用版.model3.json",
+        "url": "/live2d-models/薄巧_调用版/薄巧_调用版.model3.json",
         "kScale": 0.75,
         "initialXshift": 0,
         "initialYshift": 0,

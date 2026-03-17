@@ -1,0 +1,131 @@
+{
+    "Version": 3,
+    "FileReferences": {
+        "Moc": "../薄巧_完整版/薄巧.moc3",
+        "Textures": [
+            "../薄巧_完整版/薄巧.4096/texture_00.png",
+            "../薄巧_完整版/薄巧.4096/texture_01.png",
+            "../薄巧_完整版/薄巧.4096/texture_02.png",
+            "../薄巧_完整版/薄巧.4096/texture_03.png",
+            "../薄巧_完整版/薄巧.4096/texture_04.png"
+        ],
+        "Physics": "../薄巧_完整版/薄巧.physics3.json",
+        "DisplayInfo": "../薄巧_完整版/薄巧.cdi3.json",
+        "Expressions": [
+            {
+                "Name": "neutral",
+                "File": "exp/__neutral.exp3.json"
+            },
+            {
+                "Name": "watermark_hidden",
+                "File": "../薄巧_完整版/exp/00水印.exp3.json"
+            },
+            {
+                "Name": "hair_preset_1",
+                "File": "../薄巧_完整版/exp/发型组合预设1.exp3.json"
+            },
+            {
+                "Name": "hair_preset_2",
+                "File": "../薄巧_完整版/exp/发型组合预设2.exp3.json"
+            },
+            {
+                "Name": "hide_twintails",
+                "File": "../薄巧_完整版/exp/01双马尾隐藏.exp3.json"
+            },
+            {
+                "Name": "hide_left_twintail",
+                "File": "../薄巧_完整版/exp/02左马尾隐藏.exp3.json"
+            },
+            {
+                "Name": "hide_right_twintail",
+                "File": "../薄巧_完整版/exp/03右马尾隐藏.exp3.json"
+            },
+            {
+                "Name": "hide_loose_hair",
+                "File": "../薄巧_完整版/exp/04批发隐藏.exp3.json"
+            },
+            {
+                "Name": "hide_side_braid",
+                "File": "../薄巧_完整版/exp/05侧麻花隐藏.exp3.json"
+            },
+            {
+                "Name": "bread",
+                "File": "../薄巧_完整版/exp/06叼面包.exp3.json"
+            },
+            {
+                "Name": "crash",
+                "File": "../薄巧_完整版/exp/07宕机.exp3.json"
+            },
+            {
+                "Name": "dark_face",
+                "File": "../薄巧_完整版/exp/08脸黑.exp3.json"
+            },
+            {
+                "Name": "blush",
+                "File": "../薄巧_完整版/exp/09脸红.exp3.json"
+            },
+            {
+                "Name": "teary",
+                "File": "../薄巧_完整版/exp/10委屈.exp3.json"
+            },
+            {
+                "Name": "peace_left",
+                "File": "../薄巧_完整版/exp/11左手比耶.exp3.json"
+            },
+            {
+                "Name": "peace_right",
+                "File": "../薄巧_完整版/exp/12右手比耶.exp3.json"
+            },
+            {
+                "Name": "peace_both",
+                "File": "../薄巧_完整版/exp/13双手比耶.exp3.json"
+            },
+            {
+                "Name": "touch_face",
+                "File": "../薄巧_完整版/exp/14抚脸.exp3.json"
+            },
+            {
+                "Name": "point_face",
+                "File": "../薄巧_完整版/exp/15指脸.exp3.json"
+            },
+            {
+                "Name": "backhand_peace",
+                "File": "../薄巧_完整版/exp/16反手比耶.exp3.json"
+            },
+            {
+                "Name": "cat_sticker",
+                "File": "../薄巧_完整版/exp/17猫猫贴纸.exp3.json"
+            },
+            {
+                "Name": "angry_sticker",
+                "File": "../薄巧_完整版/exp/18生气符号.exp3.json"
+            },
+            {
+                "Name": "question_sticker",
+                "File": "../薄巧_完整版/exp/19问号.exp3.json"
+            }
+        ],
+        "Motions": {
+            "Idle": [
+                {
+                    "File": "../薄巧_完整版/idle.motion3.json"
+                }
+            ]
+        }
+    },
+    "Groups": [
+        {
+            "Target": "Parameter",
+            "Name": "EyeBlink",
+            "Ids": [
+                "ParamEyeLOpen",
+                "ParamEyeROpen"
+            ]
+        },
+        {
+            "Target": "Parameter",
+            "Name": "LipSync",
+            "Ids": []
+        }
+    ]
+}
