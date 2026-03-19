@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XnneHangLab Admin</title>
+    <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+    <div class="shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <p class="brand-kicker">XnneHangLab</p>
+                <h1>Admin</h1>
+                <p class="brand-copy">Offline plugin and profile management.</p>
+            </div>
+            <nav class="tabs" aria-label="Admin tabs">
+                <button class="tab-button is-active" type="button" data-tab="profiles">Profiles</button>
+                <button class="tab-button" type="button" data-tab="plugins">Plugins</button>
+                <button class="tab-button" type="button" data-tab="market">Market</button>
+            </nav>
+            <div class="sidebar-foot">
+                <p>Static page only.</p>
+                <p>No framework. No CDN.</p>
+            </div>
+        </aside>
+        <main class="main">
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">Phase 3</p>
+                    <h2 id="panelTitle">Profiles</h2>
+                </div>
+                <div class="topbar-meta" id="topbarMeta">Loading admin data...</div>
+            </header>
+            <section id="globalMessage" class="message is-hidden" aria-live="polite"></section>
+            <section id="panel" class="panel" aria-live="polite"></section>
+        </main>
+    </div>
+
+    <script src="./index.js"></script>
+</body>
+</html>
