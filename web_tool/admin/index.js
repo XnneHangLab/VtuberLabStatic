@@ -22,8 +22,11 @@
     var topbarMetaEl = document.getElementById("topbarMeta");
     var panelEl = document.getElementById("panel");
     var messageEl = document.getElementById("globalMessage");
+    var themeToggleEl = document.getElementById("themeToggle");
     var tabButtons = Array.prototype.slice.call(document.querySelectorAll(".tab-button"));
+    var THEME_STORAGE_KEY = "xnnehanglab-admin-theme";
 
+    applyTheme(loadThemePreference());
     initialize();
 
     document.addEventListener("click", handleClick);
@@ -897,6 +900,37 @@
         ].join("");
     }
 
+    function loadThemePreference() {
+        try {
+            return window.localStorage.getItem(THEME_STORAGE_KEY) || "day";
+        } catch (error) {
+            return "day";
+        }
+    }
+
+    function applyTheme(theme) {
+        var nextTheme = theme === "day" ? "day" : "night";
+        document.body.setAttribute("data-theme", nextTheme);
+
+        if (themeToggleEl) {
+            var isNight = nextTheme === "night";
+            themeToggleEl.textContent = isNight ? "切换到白天模式" : "切换到夜间模式";
+            themeToggleEl.setAttribute("aria-pressed", String(isNight));
+        }
+    }
+
+    function toggleTheme() {
+        var currentTheme = document.body.getAttribute("data-theme") || "night";
+        var nextTheme = currentTheme === "night" ? "day" : "night";
+        applyTheme(nextTheme);
+
+        try {
+            window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        } catch (error) {
+            return;
+        }
+    }
+
     function renderProfileOptions(profiles, selected) {
         return profiles.map(function (name) {
             return '<option value="' + escapeAttribute(name) + '"' + (name === selected ? " selected" : "") + ">" + escapeHtml(name) + "</option>";
@@ -1069,5 +1103,9 @@
 
     function escapeAttribute(value) {
         return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+
+    if (themeToggleEl) {
+        themeToggleEl.addEventListener("click", toggleTheme);
     }
 })();

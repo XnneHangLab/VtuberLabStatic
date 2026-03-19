@@ -19,6 +19,51 @@
     --radius-sm: 12px;
     --font-body: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    --shell-background:
+        radial-gradient(circle at top right, rgba(58, 167, 244, 0.12), transparent 28%),
+        linear-gradient(180deg, #090b10 0%, #050608 100%);
+    --sidebar-background: linear-gradient(180deg, rgba(14, 18, 24, 0.98), rgba(7, 9, 12, 0.98));
+    --card-background: linear-gradient(180deg, rgba(19, 24, 34, 0.96), rgba(13, 16, 20, 0.96));
+    --message-background: rgba(19, 24, 34, 0.84);
+    --pre-background: rgba(0, 0, 0, 0.22);
+    --sticky-background: linear-gradient(180deg, rgba(19, 24, 34, 0), rgba(19, 24, 34, 1) 30%);
+    --hover-background: rgba(255, 255, 255, 0.03);
+    --meta-background: rgba(255, 255, 255, 0.03);
+    --meta-border: rgba(255, 255, 255, 0.04);
+    --field-background: rgba(255, 255, 255, 0.02);
+    --field-border: rgba(255, 255, 255, 0.05);
+}
+
+body[data-theme="day"] {
+    color-scheme: light;
+    --bg: #f3f6fb;
+    --bg-elevated: #ffffff;
+    --bg-panel: #ffffff;
+    --bg-panel-strong: #edf4fb;
+    --border: #c7d4e3;
+    --border-strong: #7ea8cc;
+    --text: #15212f;
+    --text-muted: #5f7287;
+    --text-dim: #7a8999;
+    --accent: #1269b1;
+    --accent-strong: #0d5997;
+    --success: #138a63;
+    --warn: #a56807;
+    --danger: #c43a3a;
+    --shadow: 0 18px 48px rgba(37, 63, 92, 0.12);
+    --shell-background:
+        radial-gradient(circle at top right, rgba(18, 105, 177, 0.1), transparent 28%),
+        linear-gradient(180deg, #f9fbfe 0%, #edf3f9 100%);
+    --sidebar-background: linear-gradient(180deg, rgba(244, 248, 252, 0.98), rgba(235, 241, 248, 0.98));
+    --card-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 253, 0.98));
+    --message-background: rgba(255, 255, 255, 0.92);
+    --pre-background: rgba(18, 36, 54, 0.05);
+    --sticky-background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(245, 249, 253, 1) 30%);
+    --hover-background: rgba(18, 105, 177, 0.05);
+    --meta-background: rgba(18, 105, 177, 0.05);
+    --meta-border: rgba(18, 105, 177, 0.08);
+    --field-background: rgba(18, 105, 177, 0.03);
+    --field-border: rgba(18, 105, 177, 0.08);
 }
 
 * {
@@ -29,15 +74,13 @@ html,
 body {
     margin: 0;
     min-height: 100%;
-    background:
-        radial-gradient(circle at top right, rgba(58, 167, 244, 0.12), transparent 28%),
-        linear-gradient(180deg, #090b10 0%, #050608 100%);
     color: var(--text);
     font-family: var(--font-body);
 }
 
 body {
     min-height: 100vh;
+    background: var(--shell-background);
 }
 
 button,
@@ -78,7 +121,7 @@ textarea:disabled {
 .sidebar {
     padding: 28px 22px;
     border-right: 1px solid rgba(118, 199, 255, 0.1);
-    background: linear-gradient(180deg, rgba(14, 18, 24, 0.98), rgba(7, 9, 12, 0.98));
+    background: var(--sidebar-background);
 }
 
 .brand {
@@ -128,7 +171,7 @@ textarea:disabled {
 .tab-button:hover,
 .tab-button:focus-visible {
     border-color: var(--border);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--hover-background);
     color: var(--text);
 }
 
@@ -164,12 +207,24 @@ textarea:disabled {
     font-size: 14px;
 }
 
+.topbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.theme-toggle {
+    min-width: 140px;
+}
+
 .message {
     margin-bottom: 18px;
     padding: 14px 16px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
-    background: rgba(19, 24, 34, 0.84);
+    background: var(--message-background);
 }
 
 .message.is-hidden {
@@ -210,7 +265,7 @@ textarea:disabled {
 }
 
 .card {
-    background: linear-gradient(180deg, rgba(19, 24, 34, 0.96), rgba(13, 16, 20, 0.96));
+    background: var(--card-background);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -322,8 +377,8 @@ textarea:disabled {
 .meta-item {
     padding: 12px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: var(--meta-background);
+    border: 1px solid var(--meta-border);
 }
 
 .meta-item .meta-label {
@@ -401,8 +456,8 @@ textarea:disabled {
 .field {
     padding: 14px;
     border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--field-border);
+    background: var(--field-background);
 }
 
 .field-top {
@@ -471,8 +526,8 @@ textarea:disabled {
     margin: 0;
     padding: 12px;
     border-radius: 14px;
-    background: rgba(0, 0, 0, 0.22);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: var(--pre-background);
+    border: 1px solid var(--meta-border);
     overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
@@ -498,7 +553,7 @@ textarea:disabled {
     position: sticky;
     bottom: 0;
     padding: 14px 18px 18px;
-    background: linear-gradient(180deg, rgba(19, 24, 34, 0), rgba(19, 24, 34, 1) 30%);
+    background: var(--sticky-background);
 }
 
 .divider {
@@ -523,6 +578,10 @@ textarea:disabled {
     .topbar {
         align-items: start;
         flex-direction: column;
+    }
+
+    .topbar-actions {
+        justify-content: flex-start;
     }
 
     .topbar-meta {
