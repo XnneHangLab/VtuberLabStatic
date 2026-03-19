@@ -25,6 +25,9 @@
                 linear-gradient(180deg, #f9fbfe 0%, #edf3f9 100%);
             --panel-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 253, 0.98));
             --panel-subtle: rgba(18, 105, 177, 0.03);
+            --coming-soon-background:
+                linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(239, 246, 252, 0.98)),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 253, 0.98));
             --tag-background: rgba(18, 105, 177, 0.08);
             --tag-border: rgba(18, 105, 177, 0.12);
             --tag-text: #1269b1;
@@ -51,6 +54,9 @@
                 linear-gradient(180deg, #090b10 0%, #050608 100%);
             --panel-background: linear-gradient(180deg, rgba(19, 24, 34, 0.96), rgba(13, 16, 20, 0.96));
             --panel-subtle: rgba(255, 255, 255, 0.03);
+            --coming-soon-background:
+                linear-gradient(180deg, rgba(19, 24, 34, 0.9), rgba(13, 16, 20, 0.96)),
+                linear-gradient(180deg, rgba(19, 24, 34, 0.96), rgba(13, 16, 20, 0.96));
             --tag-background: rgba(118, 199, 255, 0.12);
             --tag-border: rgba(118, 199, 255, 0.18);
             --tag-text: #caecff;
@@ -216,9 +222,7 @@
         .coming-soon {
             margin-top: 18px;
             padding: 24px;
-            background:
-                linear-gradient(180deg, rgba(19, 24, 34, 0.9), rgba(13, 16, 20, 0.96)),
-                var(--panel-background);
+            background: var(--coming-soon-background);
         }
 
         .coming-soon p {
