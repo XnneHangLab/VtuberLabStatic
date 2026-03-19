@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./index.css">
 </head>
 <body>
-    <div class="shell">
+    <div id="appShell" class="shell">
         <aside class="sidebar">
             <div class="brand">
                 <p class="brand-kicker">XnneHangLab</p>
@@ -30,8 +30,14 @@
                     <h2 id="panelTitle">Profiles</h2>
                 </div>
                 <div class="topbar-actions">
-                    <button id="themeToggle" class="button theme-toggle" type="button" aria-pressed="true">
-                        切换到白天模式
+                    <button id="adminSidebarToggle" class="button sidebar-toggle" type="button" aria-pressed="false">
+                        隐藏 Admin 侧栏
+                    </button>
+                    <button id="profileSidebarToggle" class="button sidebar-toggle" type="button" aria-pressed="false">
+                        隐藏 Profile 侧栏
+                    </button>
+                    <button id="themeToggle" class="button theme-toggle" type="button" aria-pressed="false">
+                        切换到夜间模式
                     </button>
                     <div class="topbar-meta" id="topbarMeta">Loading admin data...</div>
                 </div>

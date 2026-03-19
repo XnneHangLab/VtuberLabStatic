@@ -10,6 +10,12 @@
         selectedProfileName: "",
         selectedProfileRaw: null,
         selectedProfileDraft: null,
+        ui: {
+            activePluginId: "",
+            collapsedPlugins: {},
+            adminSidebarCollapsed: false,
+            profileSidebarCollapsed: false
+        },
         loading: {
             boot: false,
             profile: false,
@@ -22,11 +28,19 @@
     var topbarMetaEl = document.getElementById("topbarMeta");
     var panelEl = document.getElementById("panel");
     var messageEl = document.getElementById("globalMessage");
+    var appShellEl = document.getElementById("appShell");
+    var adminSidebarToggleEl = document.getElementById("adminSidebarToggle");
+    var profileSidebarToggleEl = document.getElementById("profileSidebarToggle");
     var themeToggleEl = document.getElementById("themeToggle");
     var tabButtons = Array.prototype.slice.call(document.querySelectorAll(".tab-button"));
     var THEME_STORAGE_KEY = "xnnehanglab-admin-theme";
+    var ADMIN_SIDEBAR_STORAGE_KEY = "xnnehanglab-admin-sidebar-collapsed";
+    var PROFILE_SIDEBAR_STORAGE_KEY = "xnnehanglab-profile-sidebar-collapsed";
 
+    state.ui.adminSidebarCollapsed = loadBooleanPreference(ADMIN_SIDEBAR_STORAGE_KEY, false);
+    state.ui.profileSidebarCollapsed = loadBooleanPreference(PROFILE_SIDEBAR_STORAGE_KEY, false);
     applyTheme(loadThemePreference());
+    applyLayoutState();
     initialize();
 
     document.addEventListener("click", handleClick);
@@ -101,6 +115,7 @@
             state.selectedProfileName = name;
             state.selectedProfileRaw = rawProfile;
             state.selectedProfileDraft = createProfileDraft(rawProfile, state.pluginMap);
+            state.ui.activePluginId = state.selectedProfileDraft.enabled[0] || "";
             topbarMetaEl.textContent = "Editing " + name;
             if (!silent) {
                 clearMessage();
@@ -420,6 +435,22 @@
             removePlugin(actionEl.getAttribute("data-plugin-id"));
             return;
         }
+        if (action === "jump-plugin") {
+            focusPlugin(actionEl.getAttribute("data-plugin-id"));
+            return;
+        }
+        if (action === "toggle-plugin") {
+            togglePluginCollapse(actionEl.getAttribute("data-plugin-id"));
+            return;
+        }
+        if (action === "expand-all-plugins") {
+            setAllPluginCollapse(false);
+            return;
+        }
+        if (action === "collapse-all-plugins") {
+            setAllPluginCollapse(true);
+            return;
+        }
         if (action === "save-profile") {
             saveProfile(false);
             return;
@@ -490,6 +521,8 @@
             {},
             state.pluginMap
         );
+        state.ui.activePluginId = pluginId;
+        state.ui.collapsedPlugins[pluginId] = false;
         setMessage("已将插件加入当前 profile: " + pluginId, "info");
         render();
     }
@@ -505,7 +538,51 @@
         delete state.selectedProfileDraft.values[pluginId];
         delete state.selectedProfileDraft.extraOverrides[pluginId];
         delete state.selectedProfileDraft.explicitFields[pluginId];
+        delete state.ui.collapsedPlugins[pluginId];
+        if (state.ui.activePluginId === pluginId) {
+            state.ui.activePluginId = state.selectedProfileDraft.enabled[0] || "";
+        }
         setMessage("已从当前 profile 移除插件: " + pluginId, "info");
+        render();
+    }
+
+    function focusPlugin(pluginId) {
+        if (!pluginId) {
+            return;
+        }
+        state.ui.activePluginId = pluginId;
+        state.ui.collapsedPlugins[pluginId] = false;
+        render();
+
+        window.requestAnimationFrame(function () {
+            var target = document.getElementById(pluginCardDomId(pluginId));
+            if (target && typeof target.scrollIntoView === "function") {
+                target.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        });
+    }
+
+    function togglePluginCollapse(pluginId) {
+        if (!pluginId) {
+            return;
+        }
+        state.ui.collapsedPlugins[pluginId] = !Boolean(state.ui.collapsedPlugins[pluginId]);
+        if (!state.ui.collapsedPlugins[pluginId]) {
+            state.ui.activePluginId = pluginId;
+        }
+        render();
+    }
+
+    function setAllPluginCollapse(collapsed) {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        state.selectedProfileDraft.enabled.forEach(function (pluginId) {
+            state.ui.collapsedPlugins[pluginId] = collapsed;
+        });
+        if (!collapsed && state.selectedProfileDraft.enabled.length) {
+            state.ui.activePluginId = state.selectedProfileDraft.enabled[0];
+        }
         render();
     }
 
@@ -567,6 +644,7 @@
     }
 
     function render() {
+        applyLayoutState();
         renderTabs();
         renderTopbar();
 
@@ -590,6 +668,17 @@
 
     function renderTopbar() {
         panelTitleEl.textContent = capitalize(state.activeTab);
+
+        if (adminSidebarToggleEl) {
+            adminSidebarToggleEl.textContent = state.ui.adminSidebarCollapsed ? "显示 Admin 侧栏" : "隐藏 Admin 侧栏";
+            adminSidebarToggleEl.setAttribute("aria-pressed", String(!state.ui.adminSidebarCollapsed));
+        }
+
+        if (profileSidebarToggleEl) {
+            profileSidebarToggleEl.textContent = state.ui.profileSidebarCollapsed ? "显示 Profile 侧栏" : "隐藏 Profile 侧栏";
+            profileSidebarToggleEl.setAttribute("aria-pressed", String(!state.ui.profileSidebarCollapsed));
+            profileSidebarToggleEl.disabled = state.activeTab !== "profiles";
+        }
 
         if (state.loading.boot) {
             topbarMetaEl.textContent = "Loading admin data...";
@@ -636,13 +725,45 @@
 
         var rawProfile = state.selectedProfileRaw || {};
         var profileMeta = isPlainObject(rawProfile.profile) ? rawProfile.profile : {};
+        if (draft.enabled.length && draft.enabled.indexOf(state.ui.activePluginId) === -1) {
+            state.ui.activePluginId = draft.enabled[0];
+        }
         var availablePlugins = state.plugins.filter(function (plugin) {
             return draft.enabled.indexOf(plugin.id) === -1;
         });
         var saveDisabled = state.loading.save || state.loading.reload;
+        var layoutClass = "grid profiles-layout" + (state.ui.profileSidebarCollapsed ? " is-profile-collapsed" : "");
 
         return [
-            '<div class="grid profiles-layout">',
+            '<div class="' + layoutClass + '">',
+            (state.ui.profileSidebarCollapsed ? "" : renderProfileSidebar(profileMeta, draft, availablePlugins)),
+            '  <section class="card"><div class="card-body">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>Enabled Plugins</h3>",
+            '        <p class="muted">按 `config_schema` 渲染基础表单；缺少 schema 时退化为原始 JSON 编辑。</p>',
+            "      </div>",
+            '      <div class="section-actions">',
+            '        <button class="button" type="button" data-action="expand-all-plugins">全部展开</button>',
+            '        <button class="button" type="button" data-action="collapse-all-plugins">全部折叠</button>',
+            "      </div>",
+            "    </div>",
+            renderEnabledPlugins(draft.enabled, draft),
+            "  </div>",
+            '  <div class="sticky-actions">',
+            '    <div class="row">',
+            '      <button class="button" type="button" data-action="save-profile" ' + (saveDisabled ? "disabled" : "") + ">" + (state.loading.save && !state.loading.reload ? "保存中..." : "保存") + "</button>",
+            '      <button class="button is-primary" type="button" data-action="save-reload" ' + (saveDisabled ? "disabled" : "") + ">" + (state.loading.reload ? "保存并重载中..." : "保存并重载") + "</button>",
+            '    </div>',
+            '    <p class="note">保存只写回当前 profile；保存并重载会在保存成功后调用 `/admin/api/agent/reload`。</p>',
+            "  </div>",
+            "  </section>",
+            "</div>"
+        ].join("");
+    }
+
+    function renderProfileSidebar(profileMeta, draft, availablePlugins) {
+        return [
             '  <section class="card"><div class="card-body stack">',
             '    <div class="section-title">',
             "      <div>",
@@ -677,25 +798,7 @@
             '        <p class="note">只列出已安装但当前 profile 尚未启用的插件。</p>',
             "      </div>",
             "    </div>",
-            '  </div></section>',
-            '  <section class="card"><div class="card-body">',
-            '    <div class="section-title">',
-            "      <div>",
-            "        <h3>Enabled Plugins</h3>",
-            '        <p class="muted">按 `config_schema` 渲染基础表单；缺少 schema 时退化为原始 JSON 编辑。</p>',
-            "      </div>",
-            "    </div>",
-            renderEnabledPlugins(draft.enabled, draft),
-            "  </div>",
-            '  <div class="sticky-actions">',
-            '    <div class="row">',
-            '      <button class="button" type="button" data-action="save-profile" ' + (saveDisabled ? "disabled" : "") + ">" + (state.loading.save && !state.loading.reload ? "保存中..." : "保存") + "</button>",
-            '      <button class="button is-primary" type="button" data-action="save-reload" ' + (saveDisabled ? "disabled" : "") + ">" + (state.loading.reload ? "保存并重载中..." : "保存并重载") + "</button>",
-            '    </div>',
-            '    <p class="note">保存只写回当前 profile；保存并重载会在保存成功后调用 `/admin/api/agent/reload`。</p>',
-            "  </div>",
-            "  </section>",
-            "</div>"
+            "  </div></section>"
         ].join("");
     }
 
@@ -704,9 +807,47 @@
             return renderEmpty("当前没有已启用插件", "可以通过左侧下拉框从已安装插件中添加。");
         }
 
-        return enabled.map(function (pluginId) {
-            return renderPluginEditor(pluginId, draft);
-        }).join("");
+        return [
+            '<div class="plugin-workspace">',
+            renderPluginOutline(enabled),
+            '  <div class="plugin-panels">',
+            enabled.map(function (pluginId) {
+                return renderPluginEditor(pluginId, draft);
+            }).join(""),
+            "  </div>",
+            "</div>"
+        ].join("");
+    }
+
+    function renderPluginOutline(enabled) {
+        return [
+            '  <aside class="plugin-outline">',
+            '    <div class="plugin-outline-header">',
+            "      <h4>Plugin Nav</h4>",
+            '      <p class="muted">快速定位到对应插件卡片。</p>',
+            "    </div>",
+            '    <div class="plugin-outline-list">',
+            enabled.map(function (pluginId) {
+                return renderPluginOutlineLink(pluginId);
+            }).join(""),
+            "    </div>",
+            "  </aside>"
+        ].join("");
+    }
+
+    function renderPluginOutlineLink(pluginId) {
+        var pluginDef = state.pluginMap[pluginId] || createUnknownPluginDefinition(pluginId);
+        var meta = isPlainObject(pluginDef.plugin) ? pluginDef.plugin : {};
+        var isActive = state.ui.activePluginId === pluginId;
+        return (
+            '<button class="plugin-outline-link' +
+            (isActive ? " is-active" : "") +
+            '" type="button" data-action="jump-plugin" data-plugin-id="' +
+            escapeAttribute(pluginId) +
+            '">' +
+            escapeHtml(meta.name || pluginId) +
+            "</button>"
+        );
     }
 
     function renderPluginEditor(pluginId, draft) {
@@ -715,6 +856,7 @@
         var schema = isPlainObject(pluginDef.config_schema) ? pluginDef.config_schema : {};
         var schemaKeys = Object.keys(schema);
         var body = "";
+        var isCollapsed = Boolean(state.ui.collapsedPlugins[pluginId]);
 
         if (schemaKeys.length === 0) {
             body = renderRawPluginEditor(pluginId, pluginDef, draft);
@@ -730,7 +872,7 @@
         }
 
         return [
-            '<article class="plugin-card card"><div class="card-body">',
+            '<article id="' + escapeAttribute(pluginCardDomId(pluginId)) + '" class="plugin-card card' + (isCollapsed ? " is-collapsed" : "") + '"><div class="card-body">',
             '  <div class="plugin-head">',
             "    <div>",
             "      <h4>" + escapeHtml(meta.name || pluginId) + "</h4>",
@@ -740,10 +882,11 @@
             '      <span class="badge">' + escapeHtml(pluginId) + "</span>",
             '      <span class="badge is-muted">' + escapeHtml(meta.type || "unknown") + "</span>",
             (state.pluginMap[pluginId] ? "" : '<span class="badge is-warning">metadata missing</span>'),
+            '      <button class="button is-subtle icon-button chevron-button' + (isCollapsed ? " is-collapsed" : "") + '" type="button" data-action="toggle-plugin" data-plugin-id="' + escapeAttribute(pluginId) + '" aria-expanded="' + String(!isCollapsed) + '" title="' + (isCollapsed ? "展开插件卡片" : "折叠插件卡片") + '"><span class="sr-only">' + (isCollapsed ? "展开插件卡片" : "折叠插件卡片") + "</span></button>",
             '      <button class="button is-subtle is-danger" type="button" data-action="remove-plugin" data-plugin-id="' + escapeAttribute(pluginId) + '">移除</button>',
             "    </div>",
             "  </div>",
-            body,
+            '  <div class="plugin-content">' + body + "</div>",
             "</div></article>"
         ].join("");
     }
@@ -900,6 +1043,18 @@
         ].join("");
     }
 
+    function loadBooleanPreference(key, fallback) {
+        try {
+            var value = window.localStorage.getItem(key);
+            if (value === null) {
+                return fallback;
+            }
+            return value === "true";
+        } catch (error) {
+            return fallback;
+        }
+    }
+
     function loadThemePreference() {
         try {
             return window.localStorage.getItem(THEME_STORAGE_KEY) || "day";
@@ -926,6 +1081,38 @@
 
         try {
             window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        } catch (error) {
+            return;
+        }
+    }
+
+    function applyLayoutState() {
+        if (appShellEl) {
+            appShellEl.classList.toggle("is-admin-collapsed", state.ui.adminSidebarCollapsed);
+        }
+    }
+
+    function toggleAdminSidebar() {
+        state.ui.adminSidebarCollapsed = !state.ui.adminSidebarCollapsed;
+        applyLayoutState();
+        renderTopbar();
+
+        try {
+            window.localStorage.setItem(ADMIN_SIDEBAR_STORAGE_KEY, String(state.ui.adminSidebarCollapsed));
+        } catch (error) {
+            return;
+        }
+    }
+
+    function toggleProfileSidebar() {
+        if (state.activeTab !== "profiles") {
+            return;
+        }
+        state.ui.profileSidebarCollapsed = !state.ui.profileSidebarCollapsed;
+        render();
+
+        try {
+            window.localStorage.setItem(PROFILE_SIDEBAR_STORAGE_KEY, String(state.ui.profileSidebarCollapsed));
         } catch (error) {
             return;
         }
@@ -1027,6 +1214,10 @@
         return value.charAt(0).toUpperCase() + value.slice(1);
     }
 
+    function pluginCardDomId(pluginId) {
+        return "plugin-card-" + String(pluginId).replace(/[^a-zA-Z0-9_-]/g, "-");
+    }
+
     function mergeObjects(base, override) {
         var merged = isPlainObject(base) ? deepClone(base) : {};
         if (!isPlainObject(override)) {
@@ -1103,6 +1294,14 @@
 
     function escapeAttribute(value) {
         return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+
+    if (adminSidebarToggleEl) {
+        adminSidebarToggleEl.addEventListener("click", toggleAdminSidebar);
+    }
+
+    if (profileSidebarToggleEl) {
+        profileSidebarToggleEl.addEventListener("click", toggleProfileSidebar);
     }
 
     if (themeToggleEl) {
