@@ -263,6 +263,17 @@
         if (type === "int" || type === "float") {
             return "";
         }
+        if (type === "list") {
+            return [];
+        }
+        if (type === "object") {
+            var properties = isPlainObject(fieldSchema.properties) ? fieldSchema.properties : {};
+            var nextObject = {};
+            Object.keys(properties).forEach(function (key) {
+                nextObject[key] = emptyValueForSchemaField(properties[key]);
+            });
+            return nextObject;
+        }
         return "";
     }
 
@@ -307,7 +318,8 @@
                 schemaKeys.forEach(function (field) {
                     var currentValue = draft.values[pluginId] ? draft.values[pluginId][field] : undefined;
                     var defaultValue = getDefaultFieldValue(pluginDef, field);
-                    var normalizedCurrent = normalizeNumberForSave(currentValue, schema[field]);
+                    var normalizedCurrent = normalizeSchemaValueForSave(currentValue, schema[field]);
+                    var normalizedDefault = normalizeSchemaValueForCompare(defaultValue, schema[field]);
                     var keepExplicit =
                         Boolean(draft.explicitFields[pluginId]) &&
                         Boolean(draft.explicitFields[pluginId][field]);
@@ -316,7 +328,7 @@
                         return;
                     }
 
-                    if (keepExplicit || !deepEqual(normalizedCurrent, defaultValue)) {
+                    if (keepExplicit || !deepEqual(normalizedCurrent, normalizedDefault)) {
                         serialized[field] = normalizedCurrent;
                     }
                 });
@@ -374,10 +386,32 @@
         return diff;
     }
 
-    function normalizeNumberForCompare(value, schemaField) {
-        if (!schemaField || (schemaField.type !== "int" && schemaField.type !== "float")) {
+    function normalizeSchemaValueForCompare(value, schemaField) {
+        return normalizeSchemaValueForSave(value, schemaField);
+    }
+
+    function normalizeSchemaValueForSave(value, schemaField) {
+        if (!schemaField || !schemaField.type) {
             return value;
         }
+
+        if (schemaField.type === "list") {
+            var items = Array.isArray(value) ? value : [];
+            return items.map(function (item) {
+                return normalizeSchemaValueForSave(item, schemaField.items || {});
+            });
+        }
+
+        if (schemaField.type === "object") {
+            var properties = isPlainObject(schemaField.properties) ? schemaField.properties : {};
+            var source = isPlainObject(value) ? value : {};
+            var nextObject = {};
+            Object.keys(properties).forEach(function (key) {
+                nextObject[key] = normalizeSchemaValueForSave(source[key], properties[key]);
+            });
+            return nextObject;
+        }
+
         return normalizeNumberForSave(value, schemaField);
     }
 
@@ -461,6 +495,22 @@
         }
         if (action === "reset-field") {
             resetSchemaField(actionEl.getAttribute("data-plugin-id"), actionEl.getAttribute("data-field"));
+            return;
+        }
+        if (action === "add-list-item") {
+            addListItem(
+                actionEl.getAttribute("data-plugin-id"),
+                actionEl.getAttribute("data-field"),
+                parseFieldPath(actionEl.getAttribute("data-field-path"))
+            );
+            return;
+        }
+        if (action === "remove-list-item") {
+            removeListItem(
+                actionEl.getAttribute("data-plugin-id"),
+                actionEl.getAttribute("data-field"),
+                parseFieldPath(actionEl.getAttribute("data-field-path"))
+            );
         }
     }
 
@@ -473,7 +523,12 @@
         }
 
         if (target.matches("[data-field-type='bool']")) {
-            updateSchemaValue(target.getAttribute("data-plugin-id"), target.getAttribute("data-field"), target.checked);
+            updateSchemaValue(
+                target.getAttribute("data-plugin-id"),
+                target.getAttribute("data-field"),
+                target.checked,
+                parseFieldPath(target.getAttribute("data-field-path"))
+            );
             var textEl = target.parentElement ? target.parentElement.querySelector("span") : null;
             if (textEl) {
                 textEl.textContent = target.checked ? "Enabled" : "Disabled";
@@ -489,12 +544,22 @@
     function handleInput(event) {
         var target = event.target;
         if (target.matches("[data-field-type='str']")) {
-            updateSchemaValue(target.getAttribute("data-plugin-id"), target.getAttribute("data-field"), target.value);
+            updateSchemaValue(
+                target.getAttribute("data-plugin-id"),
+                target.getAttribute("data-field"),
+                target.value,
+                parseFieldPath(target.getAttribute("data-field-path"))
+            );
             return;
         }
 
         if (target.matches("[data-field-type='int'], [data-field-type='float']")) {
-            updateSchemaValue(target.getAttribute("data-plugin-id"), target.getAttribute("data-field"), target.value);
+            updateSchemaValue(
+                target.getAttribute("data-plugin-id"),
+                target.getAttribute("data-field"),
+                target.value,
+                parseFieldPath(target.getAttribute("data-field-path"))
+            );
         }
     }
 
@@ -586,26 +651,160 @@
         render();
     }
 
-    function updateSchemaValue(pluginId, field, rawValue) {
+    function parseFieldPath(rawPath) {
+        if (!rawPath) {
+            return [];
+        }
+        try {
+            var parsed = JSON.parse(rawPath);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function getSchemaFieldAtPath(schemaField, path) {
+        var current = isPlainObject(schemaField) ? schemaField : null;
+        var i;
+
+        for (i = 0; current && i < path.length; i += 1) {
+            if (current.type === "list") {
+                current = isPlainObject(current.items) ? current.items : null;
+                if (typeof path[i] === "number") {
+                    continue;
+                }
+            }
+
+            if (current && current.type === "object") {
+                var properties = isPlainObject(current.properties) ? current.properties : {};
+                current = isPlainObject(properties[path[i]]) ? properties[path[i]] : null;
+                continue;
+            }
+
+            return null;
+        }
+
+        return current;
+    }
+
+    function getValueAtPath(value, path) {
+        var current = value;
+        var i;
+        for (i = 0; i < path.length; i += 1) {
+            if (current === null || typeof current === "undefined") {
+                return undefined;
+            }
+            current = current[path[i]];
+        }
+        return current;
+    }
+
+    function setValueAtPath(rootValue, path, nextValue) {
+        if (!path.length) {
+            return nextValue;
+        }
+
+        var cursor = rootValue;
+        var i;
+        for (i = 0; i < path.length - 1; i += 1) {
+            cursor = cursor[path[i]];
+        }
+        cursor[path[path.length - 1]] = nextValue;
+        return rootValue;
+    }
+
+    function fieldPathLabel(field, path) {
+        var label = String(field || "");
+        path.forEach(function (segment) {
+            if (typeof segment === "number") {
+                label += "[" + segment + "]";
+                return;
+            }
+            label += "." + segment;
+        });
+        return label;
+    }
+
+    function updateSchemaValue(pluginId, field, rawValue, path) {
         if (!state.selectedProfileDraft || !state.selectedProfileDraft.values[pluginId]) {
             return;
         }
-        state.selectedProfileDraft.values[pluginId][field] = rawValue;
+
+        var pluginDef = state.pluginMap[pluginId] || createUnknownPluginDefinition(pluginId);
+        var nextFieldValue = deepClone(state.selectedProfileDraft.values[pluginId][field]);
+        var fieldPath = Array.isArray(path) ? path : [];
+
+        if (typeof nextFieldValue === "undefined") {
+            nextFieldValue = getDefaultFieldValue(pluginDef, field);
+        }
+
+        nextFieldValue = setValueAtPath(nextFieldValue, fieldPath, rawValue);
+        state.selectedProfileDraft.values[pluginId][field] = nextFieldValue;
         state.selectedProfileDraft.explicitFields[pluginId] = state.selectedProfileDraft.explicitFields[pluginId] || {};
         state.selectedProfileDraft.explicitFields[pluginId][field] = true;
-        updateFieldMessage(pluginId, field);
+        updateFieldMessage(pluginId, field, fieldPath);
     }
 
-    function updateFieldMessage(pluginId, field) {
+    function updateFieldMessage(pluginId, field, path) {
         var pluginDef = state.pluginMap[pluginId] || createUnknownPluginDefinition(pluginId);
         var currentValue = state.selectedProfileDraft.values[pluginId][field];
         var defaultValue = getDefaultFieldValue(pluginDef, field);
         var schemaField = pluginDef.config_schema ? pluginDef.config_schema[field] : null;
-        var isDefault = deepEqual(normalizeNumberForCompare(currentValue, schemaField), defaultValue);
+        var isDefault = deepEqual(
+            normalizeSchemaValueForCompare(currentValue, schemaField),
+            normalizeSchemaValueForCompare(defaultValue, schemaField)
+        );
         setMessage(
-            pluginId + "." + field + (isDefault ? " 正在使用默认值。" : " 已写入当前编辑态，保存后生效。"),
+            pluginId + "." + fieldPathLabel(field, path || []) + (isDefault ? " 正在使用默认值。" : " 已写入当前编辑态，保存后生效。"),
             "info"
         );
+    }
+
+    function addListItem(pluginId, field, path) {
+        if (!state.selectedProfileDraft || !state.selectedProfileDraft.values[pluginId]) {
+            return;
+        }
+
+        var pluginDef = state.pluginMap[pluginId] || createUnknownPluginDefinition(pluginId);
+        var schemaField = pluginDef.config_schema ? pluginDef.config_schema[field] : null;
+        var listSchema = getSchemaFieldAtPath(schemaField, path || []);
+        if (!listSchema || listSchema.type !== "list") {
+            return;
+        }
+
+        var nextFieldValue = deepClone(state.selectedProfileDraft.values[pluginId][field]);
+        var currentList = (path && path.length ? getValueAtPath(nextFieldValue, path) : nextFieldValue);
+        var nextList = Array.isArray(currentList) ? currentList.slice() : [];
+        nextList.push(emptyValueForSchemaField(listSchema.items || {}));
+        nextFieldValue = setValueAtPath(nextFieldValue, path || [], nextList);
+        state.selectedProfileDraft.values[pluginId][field] = nextFieldValue;
+        state.selectedProfileDraft.explicitFields[pluginId] = state.selectedProfileDraft.explicitFields[pluginId] || {};
+        state.selectedProfileDraft.explicitFields[pluginId][field] = true;
+        setMessage("已新增 " + pluginId + "." + fieldPathLabel(field, path || []) + " 的列表项。", "info");
+        render();
+    }
+
+    function removeListItem(pluginId, field, path) {
+        if (!state.selectedProfileDraft || !state.selectedProfileDraft.values[pluginId] || !Array.isArray(path) || !path.length) {
+            return;
+        }
+
+        var itemIndex = path[path.length - 1];
+        var listPath = path.slice(0, -1);
+        var nextFieldValue = deepClone(state.selectedProfileDraft.values[pluginId][field]);
+        var currentList = listPath.length ? getValueAtPath(nextFieldValue, listPath) : nextFieldValue;
+        if (!Array.isArray(currentList) || typeof itemIndex !== "number") {
+            return;
+        }
+
+        var nextList = currentList.slice();
+        nextList.splice(itemIndex, 1);
+        nextFieldValue = setValueAtPath(nextFieldValue, listPath, nextList);
+        state.selectedProfileDraft.values[pluginId][field] = nextFieldValue;
+        state.selectedProfileDraft.explicitFields[pluginId] = state.selectedProfileDraft.explicitFields[pluginId] || {};
+        state.selectedProfileDraft.explicitFields[pluginId][field] = true;
+        setMessage("已删除 " + pluginId + "." + fieldPathLabel(field, path) + "。", "info");
+        render();
     }
 
     function updateRawPluginConfig(textareaEl) {
@@ -895,7 +1094,10 @@
         var schemaField = pluginDef.config_schema[field] || {};
         var currentValue = draft.values[pluginId] ? draft.values[pluginId][field] : "";
         var defaultValue = getDefaultFieldValue(pluginDef, field);
-        var usingDefault = deepEqual(normalizeNumberForCompare(currentValue, schemaField), defaultValue);
+        var usingDefault = deepEqual(
+            normalizeSchemaValueForCompare(currentValue, schemaField),
+            normalizeSchemaValueForCompare(defaultValue, schemaField)
+        );
         var badges = [
             '<span class="badge ' + (usingDefault ? "is-muted" : "is-success") + '">' + (usingDefault ? "default" : "override") + "</span>"
         ];
@@ -910,17 +1112,97 @@
             "    <div>",
             '      <div class="field-title">' + escapeHtml(field) + "</div>",
             "    </div>",
-            '    <div class="badges">' + badges.join("") + "</div>",
+            '    <div class="badges">' + badges.join("") + '<button class="button is-subtle" type="button" data-action="reset-field" data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '">恢复默认</button></div>',
             "  </div>",
             '  <p class="field-desc">' + escapeHtml(schemaField.description || "No description") + "</p>",
-            renderSchemaInput(pluginId, field, schemaField, currentValue),
+            renderSchemaNode(pluginId, field, schemaField, currentValue, [], field),
             '  <div class="field-meta">默认值: ' + escapeHtml(displayValue(defaultValue)) + extraNumberMeta(schemaField) + "</div>",
             "</section>"
         ].join("");
     }
 
-    function renderSchemaInput(pluginId, field, schemaField, currentValue) {
-        var common = ' data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '"';
+    function renderSchemaNode(pluginId, field, schemaField, currentValue, path, label) {
+        if (schemaField.type === "object") {
+            return renderObjectSchemaNode(pluginId, field, schemaField, currentValue, path);
+        }
+        if (schemaField.type === "list") {
+            return renderListSchemaNode(pluginId, field, schemaField, currentValue, path);
+        }
+        return renderPrimitiveSchemaNode(pluginId, field, schemaField, currentValue, path, label);
+    }
+
+    function renderObjectSchemaNode(pluginId, field, schemaField, currentValue, path) {
+        var properties = isPlainObject(schemaField.properties) ? schemaField.properties : {};
+        var objectValue = isPlainObject(currentValue) ? currentValue : emptyValueForSchemaField(schemaField);
+        var keys = Object.keys(properties);
+
+        if (!keys.length) {
+            return '<div class="empty-copy">This object has no editable fields.</div>';
+        }
+
+        return [
+            '<div class="nested-fields">',
+            keys.map(function (key) {
+                return renderNestedSchemaField(pluginId, field, properties[key], objectValue[key], path.concat(key), key);
+            }).join(""),
+            "</div>"
+        ].join("");
+    }
+
+    function renderListSchemaNode(pluginId, field, schemaField, currentValue, path) {
+        var itemSchema = isPlainObject(schemaField.items) ? schemaField.items : {};
+        var items = Array.isArray(currentValue) ? currentValue : [];
+        var pathAttr = escapeAttribute(JSON.stringify(path || []));
+
+        return [
+            '<div class="list-editor">',
+            '  <div class="list-toolbar">',
+            '    <p class="note">按当前顺序保存为对象列表。</p>',
+            '    <button class="button" type="button" data-action="add-list-item" data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '" data-field-path="' + pathAttr + '">新增 item</button>',
+            "  </div>",
+            items.length
+                ? ('  <div class="list-items">' + items.map(function (item, index) {
+                    return renderListSchemaItem(pluginId, field, itemSchema, item, path.concat(index), index);
+                }).join("") + "</div>")
+                : '  <div class="empty-copy">No items yet.</div>',
+            "</div>"
+        ].join("");
+    }
+
+    function renderListSchemaItem(pluginId, field, itemSchema, itemValue, itemPath, index) {
+        return [
+            '<section class="list-item-card">',
+            '  <div class="list-item-head">',
+            '    <div class="list-item-anchor"></div>',
+            '    <button class="button is-subtle is-danger" type="button" data-action="remove-list-item" data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '" data-field-path="' + escapeAttribute(JSON.stringify(itemPath)) + '">删除</button>',
+            "  </div>",
+            renderSchemaNode(pluginId, field, itemSchema, itemValue, itemPath, field),
+            "</section>"
+        ].join("");
+    }
+
+    function renderNestedSchemaField(pluginId, field, schemaField, currentValue, path, label) {
+        return [
+            '<section class="nested-field">',
+            '  <div class="nested-field-head">',
+            '    <div class="field-title">' + escapeHtml(label) + "</div>",
+            (schemaField.type ? ('    <span class="badge is-muted">' + escapeHtml(schemaField.type) + "</span>") : ""),
+            "  </div>",
+            schemaField.description ? ('  <p class="field-desc">' + escapeHtml(schemaField.description) + "</p>") : "",
+            renderSchemaNode(pluginId, field, schemaField, currentValue, path, label),
+            "</section>"
+        ].join("");
+    }
+
+    function renderPrimitiveSchemaNode(pluginId, field, schemaField, currentValue, path, label) {
+        var common =
+            ' data-plugin-id="' +
+            escapeAttribute(pluginId) +
+            '" data-field="' +
+            escapeAttribute(field) +
+            '" data-field-path="' +
+            escapeAttribute(JSON.stringify(path || [])) +
+            '"';
 
         if (schemaField.type === "bool") {
             return [
@@ -929,7 +1211,14 @@
                 '    <input type="checkbox" data-field-type="bool"' + common + (Boolean(currentValue) ? " checked" : "") + ">",
                 '    <span>' + (Boolean(currentValue) ? "Enabled" : "Disabled") + "</span>",
                 "  </label>",
-                '  <button class="button" type="button" data-action="reset-field" data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '">恢复默认</button>',
+                "</div>"
+            ].join("");
+        }
+
+        if (schemaField.type === "str" && label === "description") {
+            return [
+                '<div class="field-input-row">',
+                '  <textarea class="textarea compact-textarea" data-field-type="str"' + common + ">" + escapeHtml(displayInputValue(currentValue)) + "</textarea>",
                 "</div>"
             ].join("");
         }
@@ -943,7 +1232,6 @@
         return [
             '<div class="field-input-row">',
             '  <input class="input" type="' + inputType + '" data-field-type="' + escapeAttribute(schemaField.type || "str") + '"' + common + stepAttr + min + max + ' value="' + escapeAttribute(displayInputValue(currentValue)) + '">',
-            '  <button class="button" type="button" data-action="reset-field" data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '">恢复默认</button>',
             "</div>"
         ].join("");
     }
