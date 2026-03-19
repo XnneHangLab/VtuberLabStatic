@@ -375,6 +375,12 @@ textarea:disabled {
     color: #ffd7d7;
 }
 
+body[data-theme="day"] .button.is-danger {
+    border-color: rgba(196, 58, 58, 0.3);
+    background: rgba(196, 58, 58, 0.06);
+    color: #9f2525;
+}
+
 .button.is-subtle {
     background: transparent;
 }
@@ -549,6 +555,7 @@ textarea:disabled {
     border: 1px solid rgba(118, 199, 255, 0.18);
     color: #caecff;
     font-size: 12px;
+    font-weight: 600;
 }
 
 .badge.is-muted {
@@ -569,9 +576,100 @@ textarea:disabled {
     color: #d4fff0;
 }
 
+body[data-theme="day"] .badge {
+    background: rgba(18, 105, 177, 0.12);
+    border-color: rgba(18, 105, 177, 0.18);
+    color: #0f4d83;
+}
+
+body[data-theme="day"] .badge.is-muted {
+    background: rgba(21, 33, 47, 0.06);
+    border-color: rgba(21, 33, 47, 0.08);
+    color: #516477;
+}
+
+body[data-theme="day"] .badge.is-warning {
+    background: rgba(165, 104, 7, 0.12);
+    border-color: rgba(165, 104, 7, 0.18);
+    color: #7d4b00;
+}
+
+body[data-theme="day"] .badge.is-success {
+    background: rgba(19, 138, 99, 0.12);
+    border-color: rgba(19, 138, 99, 0.18);
+    color: #0d6b4d;
+}
+
 .fields {
     display: grid;
     gap: 14px;
+}
+
+.nested-fields {
+    display: grid;
+    gap: 12px;
+}
+
+.nested-field {
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--field-border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+}
+
+.nested-field-head,
+.list-item-head,
+.list-toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+}
+
+.list-toolbar {
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.list-editor,
+.list-items {
+    display: grid;
+    gap: 12px;
+}
+
+.list-item-card {
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--field-border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.list-item-card h5 {
+    margin: 0;
+    font-size: 15px;
+}
+
+.list-item-anchor {
+    min-height: 1px;
+}
+
+.list-item-head {
+    margin-bottom: 10px;
+}
+
+.compact-textarea {
+    min-height: 96px;
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+body[data-theme="day"] .nested-field,
+body[data-theme="day"] .list-item-card {
+    border-color: rgba(18, 105, 177, 0.12);
+    background: linear-gradient(180deg, rgba(18, 105, 177, 0.06), rgba(18, 105, 177, 0.025));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .field {
