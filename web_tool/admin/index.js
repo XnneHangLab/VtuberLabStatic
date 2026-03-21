@@ -191,6 +191,7 @@
 
     function createProfileDraft(rawProfile, pluginMap) {
         var pluginsSection = isPlainObject(rawProfile && rawProfile.plugins) ? rawProfile.plugins : {};
+        var characterSection = isPlainObject(rawProfile && rawProfile.character) ? rawProfile.character : {};
         var enabled = Array.isArray(pluginsSection.enabled) ? pluginsSection.enabled.slice() : [];
         var rawOverrides = {};
         var values = {};
@@ -211,8 +212,57 @@
             enabled: enabled,
             values: values,
             extraOverrides: extraOverrides,
-            explicitFields: explicitFields
+            explicitFields: explicitFields,
+            character: normalizeCharacterDraft(characterSection)
         };
+    }
+
+    function boolVal(obj, key, defaultVal) {
+        if (!isPlainObject(obj)) {
+            return defaultVal;
+        }
+        return Object.prototype.hasOwnProperty.call(obj, key) ? Boolean(obj[key]) : defaultVal;
+    }
+
+    function normalizeCharacterTtsDraft(ttsDraft) {
+        var nextDraft = isPlainObject(ttsDraft) ? deepClone(ttsDraft) : {};
+        if (!isPlainObject(nextDraft.emotions)) {
+            nextDraft.emotions = { "default": "emotions/neutral.wav" };
+        }
+        if (typeof nextDraft.character_name !== "string") {
+            nextDraft.character_name = "";
+        }
+        return nextDraft;
+    }
+
+    function normalizeCharacterDraft(characterSection) {
+        var nextCharacter = isPlainObject(characterSection) ? deepClone(characterSection) : {};
+        var preprocessor = isPlainObject(nextCharacter.tts_preprocessor) ? nextCharacter.tts_preprocessor : {};
+
+        return {
+            conf_name: nextCharacter.conf_name || "",
+            conf_uid: nextCharacter.conf_uid || "",
+            live2d_model_name: nextCharacter.live2d_model_name || "",
+            character_name: nextCharacter.character_name || "",
+            avatar: nextCharacter.avatar || "",
+            human_name: nextCharacter.human_name || "",
+            tts_preprocessor: {
+                remove_special_char: boolVal(preprocessor, "remove_special_char", true),
+                ignore_brackets: boolVal(preprocessor, "ignore_brackets", true),
+                ignore_parentheses: boolVal(preprocessor, "ignore_parentheses", true),
+                ignore_asterisks: boolVal(preprocessor, "ignore_asterisks", true),
+                ignore_angle_brackets: boolVal(preprocessor, "ignore_angle_brackets", true)
+            },
+            tts: normalizeCharacterTtsDraft(nextCharacter.tts)
+        };
+    }
+
+    function ensureCharacterDraft(draft) {
+        if (!draft) {
+            return normalizeCharacterDraft({});
+        }
+        draft.character = normalizeCharacterDraft(draft.character);
+        return draft.character;
     }
 
     function initializePluginDraft(pluginId, values, extraOverrides, explicitFields, rawOverrides, pluginMap) {
@@ -340,6 +390,15 @@
         });
 
         payload.plugins = nextPlugins;
+        payload.character = isPlainObject(payload.character) ? payload.character : {};
+        payload.character.conf_name = ensureCharacterDraft(draft).conf_name;
+        payload.character.conf_uid = ensureCharacterDraft(draft).conf_uid;
+        payload.character.live2d_model_name = ensureCharacterDraft(draft).live2d_model_name;
+        payload.character.character_name = ensureCharacterDraft(draft).character_name;
+        payload.character.avatar = ensureCharacterDraft(draft).avatar;
+        payload.character.human_name = ensureCharacterDraft(draft).human_name;
+        payload.character.tts_preprocessor = deepClone(ensureCharacterDraft(draft).tts_preprocessor);
+        payload.character.tts = deepClone(ensureCharacterDraft(draft).tts);
         return payload;
     }
 
@@ -485,6 +544,14 @@
             setAllPluginCollapse(true);
             return;
         }
+        if (action === "add-tts-emotion") {
+            addTtsEmotion();
+            return;
+        }
+        if (action === "remove-emotion") {
+            removeTtsEmotion(actionEl.getAttribute("data-key"));
+            return;
+        }
         if (action === "save-profile") {
             saveProfile(false);
             return;
@@ -533,6 +600,31 @@
             if (textEl) {
                 textEl.textContent = target.checked ? "Enabled" : "Disabled";
             }
+            return;
+        }
+
+        if (target.matches("[data-action='update-tts-character-name']")) {
+            updateTtsCharacterName(target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-character-field']")) {
+            updateCharacterField(target.getAttribute("data-field"), target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-tts-preprocessor']")) {
+            updateTtsPreprocessorField(target.getAttribute("data-field"), target.checked);
+            return;
+        }
+
+        if (target.matches("[data-action='update-emotion-key']")) {
+            renameTtsEmotionKey(target.getAttribute("data-old-key"), target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-emotion-value']")) {
+            updateTtsEmotionValue(target.getAttribute("data-key"), target.value);
             return;
         }
 
@@ -807,6 +899,85 @@
         render();
     }
 
+    function updateCharacterField(field, value) {
+        if (!state.selectedProfileDraft || !field) {
+            return;
+        }
+        ensureCharacterDraft(state.selectedProfileDraft)[field] = value;
+        setMessage("\u5df2\u66f4\u65b0 character." + field + "\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
+    function updateTtsPreprocessorField(field, checked) {
+        if (!state.selectedProfileDraft || !field) {
+            return;
+        }
+        ensureCharacterDraft(state.selectedProfileDraft).tts_preprocessor[field] = checked;
+        setMessage(
+            "\u5df2\u66f4\u65b0 character.tts_preprocessor." + field + "\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002",
+            "info"
+        );
+        render();
+    }
+
+    function updateTtsCharacterName(value) {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        ensureCharacterDraft(state.selectedProfileDraft).tts.character_name = value;
+        setMessage("\u5df2\u66f4\u65b0 character.tts.character_name\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
+    function renameTtsEmotionKey(oldKey, newKey) {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        var emotions = ensureCharacterDraft(state.selectedProfileDraft).tts.emotions;
+        var previousKey = typeof oldKey === "string" ? oldKey : "";
+        var nextKey = typeof newKey === "string" ? newKey : "";
+        var currentValue = Object.prototype.hasOwnProperty.call(emotions, previousKey) ? emotions[previousKey] : "";
+
+        if (previousKey === nextKey) {
+            return;
+        }
+
+        delete emotions[previousKey];
+        emotions[nextKey] = currentValue;
+        setMessage("\u5df2\u66f4\u65b0 character.tts.emotions \u7684\u60c5\u7eea\u540d\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
+    function updateTtsEmotionValue(key, value) {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        ensureCharacterDraft(state.selectedProfileDraft).tts.emotions[typeof key === "string" ? key : ""] = value;
+        setMessage("\u5df2\u66f4\u65b0 character.tts.emotions \u7684 wav \u8def\u5f84\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
+    function addTtsEmotion() {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        var emotions = ensureCharacterDraft(state.selectedProfileDraft).tts.emotions;
+        if (!Object.prototype.hasOwnProperty.call(emotions, "")) {
+            emotions[""] = "";
+        }
+        setMessage("\u5df2\u65b0\u589e\u4e00\u884c character.tts.emotions\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
+    function removeTtsEmotion(key) {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        delete ensureCharacterDraft(state.selectedProfileDraft).tts.emotions[typeof key === "string" ? key : ""];
+        setMessage("\u5df2\u5220\u9664\u4e00\u6761 character.tts.emotions \u6620\u5c04\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
     function updateRawPluginConfig(textareaEl) {
         var pluginId = textareaEl.getAttribute("data-raw-plugin");
         if (!state.selectedProfileDraft || !pluginId) {
@@ -936,6 +1107,8 @@
         return [
             '<div class="' + layoutClass + '">',
             (state.ui.profileSidebarCollapsed ? "" : renderProfileSidebar(profileMeta, draft, availablePlugins)),
+            '  <div class="stack">',
+            renderCharacterCardSafe(draft),
             '  <section class="card"><div class="card-body">',
             '    <div class="section-title">',
             "      <div>",
@@ -957,7 +1130,230 @@
             '    <p class="note">保存只写回当前 profile；保存并重载会在保存成功后调用 `/admin/api/agent/reload`。</p>',
             "  </div>",
             "  </section>",
+            "  </div>",
             "</div>"
+        ].join("");
+    }
+
+    function renderCharacterTtsCard(draft) {
+        var characterTts = ensureCharacterTtsDraft(draft);
+        var emotions = isPlainObject(characterTts.emotions) ? characterTts.emotions : {};
+        var emotionKeys = Object.keys(emotions);
+
+        return [
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>Character TTS</h3>",
+            '        <p class="muted">缂栬緫 `[character.tts]`锛岀敤浜?GPT-SoVITS 瑙掕壊鍜屾儏缁?ref_audio 鏄犲皠銆?/p>',
+            "      </div>",
+            "    </div>",
+            '    <section class="field">',
+            '      <div class="field-top"><div class="field-title">character_name</div></div>',
+            '      <p class="field-desc">GPT-SoVITS 瑙掕壊鐩綍鍚嶏紝鐩稿浜?models/gptsovits/銆?/p>',
+            '      <input class="input" type="text" placeholder="baoqiao" data-action="update-tts-character-name" value="' + escapeAttribute(displayInputValue(characterTts.character_name)) + '" />',
+            "    </section>",
+            '    <section class="field">',
+            '      <div class="section-title">',
+            "        <div>",
+            '          <div class="field-title">emotions</div>',
+            '          <p class="field-desc">鎯呯华鍚?-> wav 璺緞锛岀浉瀵逛簬 `models/gptsovits/&lt;character_name&gt;/`銆?/p>',
+            "        </div>",
+            '        <div class="section-actions">',
+            '          <button class="button" type="button" data-action="add-tts-emotion">+ 娣诲姞鎯呯华</button>',
+            "        </div>",
+            "      </div>",
+            (
+                emotionKeys.length
+                    ? ('      <div class="stack">' + emotionKeys.map(function (key) {
+                        return renderEmotionRow(key, emotions[key]);
+                    }).join("") + "</div>")
+                    : '      <div class="empty-copy">No emotion mappings yet.</div>'
+            ),
+            "    </section>",
+            "  </div></section>"
+        ].join("");
+    }
+
+    function renderEmotionRow(key, value) {
+        return [
+            '        <div class="row" data-emotion-key="' + escapeAttribute(key) + '">',
+            '          <input class="input" type="text" placeholder="鎯呯华鍚?" data-action="update-emotion-key" data-old-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(key)) + '" />',
+            '          <input class="input grow" type="text" placeholder="emotions/neutral.wav" data-action="update-emotion-value" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(value)) + '" />',
+            '          <button class="button is-subtle is-danger" type="button" data-action="remove-emotion" data-key="' + escapeAttribute(key) + '">鍒犻櫎</button>',
+            "        </div>"
+        ].join("");
+    }
+
+    function renderCharacterTtsCardSafe(draft) {
+        var characterTts = ensureCharacterTtsDraft(draft);
+        var emotions = isPlainObject(characterTts.emotions) ? characterTts.emotions : {};
+        var emotionKeys = Object.keys(emotions);
+
+        return [
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>Character TTS</h3>",
+            '        <p class="muted">编辑 `[character.tts]`，用于配置 GPT-SoVITS 的角色目录和情绪 ref_audio 映射。</p>',
+            "      </div>",
+            "    </div>",
+            '    <section class="field">',
+            '      <div class="field-top"><div class="field-title">character_name</div></div>',
+            '      <p class="field-desc">角色目录名，相对于 `models/gptsovits/`。</p>',
+            '      <input class="input" type="text" placeholder="baoqiao" data-action="update-tts-character-name" value="' + escapeAttribute(displayInputValue(characterTts.character_name)) + '" />',
+            "    </section>",
+            '    <section class="field">',
+            '      <div class="section-title">',
+            "        <div>",
+            '          <div class="field-title">emotions</div>',
+            '          <p class="field-desc">情绪名到 wav 路径的映射，路径相对于 `models/gptsovits/&lt;character_name&gt;/`。</p>',
+            "        </div>",
+            '        <div class="section-actions">',
+            '          <button class="button" type="button" data-action="add-tts-emotion">+ 添加情绪</button>',
+            "        </div>",
+            "      </div>",
+            (
+                emotionKeys.length
+                    ? ('      <div class="stack">' + emotionKeys.map(function (key) {
+                        return renderEmotionRowSafe(key, emotions[key]);
+                    }).join("") + "</div>")
+                    : '      <div class="empty-copy">还没有情绪映射。</div>'
+            ),
+            "    </section>",
+            "  </div></section>"
+        ].join("");
+    }
+
+    function renderEmotionRowSafe(key, value) {
+        return [
+            '        <div class="row" data-emotion-key="' + escapeAttribute(key) + '">',
+            '          <input class="input" type="text" placeholder="\u60c5\u7eea\u540d" data-action="update-emotion-key" data-old-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(key)) + '" />',
+            '          <input class="input grow" type="text" placeholder="emotions/neutral.wav" data-action="update-emotion-value" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(value)) + '" />',
+            '          <button class="button is-subtle is-danger" type="button" data-action="remove-emotion" data-key="' + escapeAttribute(key) + '">\u5220\u9664</button>',
+            "        </div>"
+        ].join("");
+    }
+
+    function renderCharacterCardSafe(draft) {
+        var character = ensureCharacterDraft(draft);
+        var baseFields = [
+            { key: "conf_name", label: "conf_name", placeholder: "baoqiao-local" },
+            { key: "conf_uid", label: "conf_uid", placeholder: "baoqiao-local-001" },
+            { key: "live2d_model_name", label: "live2d_model_name", placeholder: "Baoqiao" },
+            { key: "character_name", label: "character_name", placeholder: "\u89d2\u8272\u540d" },
+            { key: "avatar", label: "avatar", placeholder: "baoqiao.png" },
+            { key: "human_name", label: "human_name", placeholder: "Human" }
+        ];
+        var preprocessorFields = [
+            {
+                key: "remove_special_char",
+                label: "remove_special_char",
+                description: "\u79fb\u9664 TTS \u6587\u672c\u4e2d\u4e0d\u9002\u5408\u6717\u8bfb\u7684\u7279\u6b8a\u7b26\u53f7\u3002"
+            },
+            {
+                key: "ignore_brackets",
+                label: "ignore_brackets",
+                description: "\u5ffd\u7565\u4e2d\u62ec\u53f7\u5185\u7684\u5185\u5bb9\uff0c\u4f8b\u5982\u3010\u65c1\u767d\u3011\u6216\u3010\u52a8\u4f5c\u3011\u3002"
+            },
+            {
+                key: "ignore_parentheses",
+                label: "ignore_parentheses",
+                description: "\u5ffd\u7565\u5706\u62ec\u53f7\u5185\u7684\u5185\u5bb9\uff0c\u4f8b\u5982\uff08\u8865\u5145\u8bf4\u660e\uff09\u3002"
+            },
+            {
+                key: "ignore_asterisks",
+                label: "ignore_asterisks",
+                description: "\u5ffd\u7565\u661f\u53f7\u5305\u88f9\u7684\u5185\u5bb9\uff0c\u4f8b\u5982 *\u52a8\u4f5c* \u6216 *\u821e\u53f0\u63cf\u5199*\u3002"
+            },
+            {
+                key: "ignore_angle_brackets",
+                label: "ignore_angle_brackets",
+                description: "\u5ffd\u7565\u5c16\u62ec\u53f7\u5185\u7684\u5185\u5bb9\uff0c\u4f8b\u5982 <think> \u6216\u5176\u4ed6\u6807\u8bb0\u6bb5\u3002"
+            }
+        ];
+
+        return [
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>Character</h3>",
+            '        <p class="muted">\u5728\u8fd9\u91cc\u7edf\u4e00\u7f16\u8f91 `[character]` \u7684\u57fa\u7840\u4fe1\u606f\u3001TTS \u9884\u5904\u7406\u4ee5\u53ca Character TTS \u914d\u7f6e\u3002</p>',
+            "      </div>",
+            "    </div>",
+            '    <section class="field stack">',
+            '      <div class="field-top"><div class="field-title">\u57fa\u7840\u4fe1\u606f</div></div>',
+            '      <div class="fields">',
+            baseFields.map(function (field) {
+                return renderCharacterTextField(field, character[field.key]);
+            }).join(""),
+            "      </div>",
+            "    </section>",
+            '    <section class="field stack">',
+            '      <div class="field-top"><div class="field-title">TTS Preprocessor</div></div>',
+            '      <div class="fields">',
+            preprocessorFields.map(function (field) {
+                return renderCharacterCheckboxField(field, character.tts_preprocessor[field.key]);
+            }).join(""),
+            "      </div>",
+            "    </section>",
+            renderCharacterTtsSection(character.tts),
+            "  </div></section>"
+        ].join("");
+    }
+
+    function renderCharacterTextField(field, value) {
+        return [
+            '        <section class="field">',
+            '          <div class="field-top"><div class="field-title">' + escapeHtml(field.label) + "</div></div>",
+            '          <input class="input" type="text" data-action="update-character-field" data-field="' + escapeAttribute(field.key) + '" placeholder="' + escapeAttribute(field.placeholder) + '" value="' + escapeAttribute(displayInputValue(value)) + '" />',
+            "        </section>"
+        ].join("");
+    }
+
+    function renderCharacterCheckboxField(field, checked) {
+        return [
+            '        <section class="field">',
+            '          <div class="field-top">',
+            '            <div class="field-title">' + escapeHtml(field.label) + "</div>",
+            '            <input type="checkbox" data-action="update-tts-preprocessor" data-field="' + escapeAttribute(field.key) + '"' + (checked ? " checked" : "") + " />",
+            "          </div>",
+            '          <p class="field-desc">' + escapeHtml(field.description || "") + "</p>",
+            "        </section>"
+        ].join("");
+    }
+
+    function renderCharacterTtsSection(tts) {
+        var emotions = isPlainObject(tts.emotions) ? tts.emotions : {};
+        var emotionKeys = Object.keys(emotions);
+
+        return [
+            '    <section class="field stack">',
+            '      <div class="field-top"><div class="field-title">Character TTS</div></div>',
+            '      <section class="field">',
+            '        <div class="field-top"><div class="field-title">character_name</div></div>',
+            '        <p class="field-desc">\u89d2\u8272\u76ee\u5f55\u540d\uff0c\u76f8\u5bf9\u4e8e `models/gptsovits/`\u3002</p>',
+            '        <input class="input" type="text" placeholder="baoqiao" data-action="update-tts-character-name" value="' + escapeAttribute(displayInputValue(tts.character_name)) + '" />',
+            "      </section>",
+            '      <section class="field">',
+            '        <div class="section-title">',
+            "          <div>",
+            '            <div class="field-title">emotions</div>',
+            '            <p class="field-desc">\u60c5\u7eea\u540d\u5230 wav \u8def\u5f84\u7684\u6620\u5c04\uff0c\u8def\u5f84\u76f8\u5bf9\u4e8e `models/gptsovits/&lt;character_name&gt;/`\u3002</p>',
+            "          </div>",
+            '          <div class="section-actions">',
+            '            <button class="button" type="button" data-action="add-tts-emotion">+ \u6dfb\u52a0\u60c5\u7eea</button>',
+            "          </div>",
+            "        </div>",
+            (
+                emotionKeys.length
+                    ? ('        <div class="stack">' + emotionKeys.map(function (key) {
+                        return renderEmotionRowSafe(key, emotions[key]);
+                    }).join("") + "</div>")
+                    : '        <div class="empty-copy">\u8fd8\u6ca1\u6709\u60c5\u7eea\u6620\u5c04\u3002</div>'
+            ),
+            "      </section>",
+            "    </section>"
         ].join("");
     }
 
