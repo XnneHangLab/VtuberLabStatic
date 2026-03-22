@@ -6,10 +6,18 @@
         activeTab: "profiles",
         plugins: [],
         profiles: [],
+        providers: [],
         pluginMap: {},
         selectedProfileName: "",
         selectedProfileRaw: null,
         selectedProfileDraft: null,
+        agentConfigDraft: null,
+        providerDrafts: {},
+        newProviderDraft: {
+            name: "",
+            base_url: "",
+            api_key: ""
+        },
         ui: {
             activePluginId: "",
             collapsedPlugins: {},
@@ -20,7 +28,10 @@
             boot: false,
             profile: false,
             save: false,
-            reload: false
+            reload: false,
+            providers: false,
+            providerSave: false,
+            agentConfigSave: false
         }
     };
 
@@ -52,9 +63,11 @@
         setMessage("正在加载 Profiles 和 Plugins...", "info");
         render();
 
-        var results = await Promise.allSettled([fetchPlugins(), fetchProfiles()]);
+        var results = await Promise.allSettled([fetchPlugins(), fetchProfiles(), fetchProviders(), fetchAgentConfig()]);
         var pluginsResult = results[0];
         var profilesResult = results[1];
+        var providersResult = results[2];
+        var agentConfigResult = results[3];
 
         if (pluginsResult.status === "fulfilled") {
             state.plugins = pluginsResult.value;
@@ -67,6 +80,19 @@
             state.profiles = profilesResult.value;
         } else {
             setMessage(getErrorMessage(profilesResult.reason, "加载 profile 列表失败"), "error");
+        }
+
+        if (providersResult.status === "fulfilled") {
+            state.providers = providersResult.value;
+            state.providerDrafts = buildProviderDrafts(state.providers);
+        } else {
+            setMessage(getErrorMessage(providersResult.reason, "加载 provider 列表失败"), "error");
+        }
+
+        if (agentConfigResult.status === "fulfilled") {
+            state.agentConfigDraft = deepClone(agentConfigResult.value);
+        } else {
+            setMessage(getErrorMessage(agentConfigResult.reason, "加载 agent 配置失败"), "error");
         }
 
         state.loading.boot = false;
@@ -93,6 +119,14 @@
 
     async function fetchProfiles() {
         return apiFetch("/profiles");
+    }
+
+    async function fetchProviders() {
+        return apiFetch("/providers");
+    }
+
+    async function fetchAgentConfig() {
+        return apiFetch("/config/agent");
     }
 
     async function loadProfile(name, silent) {
@@ -183,6 +217,196 @@
             map[plugins[i].id] = plugins[i];
         }
         return map;
+    }
+
+    function buildProviderDrafts(providers) {
+        var drafts = {};
+        providers.forEach(function (provider) {
+            drafts[provider.name] = {
+                name: provider.name,
+                base_url: typeof provider.base_url === "string" ? provider.base_url : "",
+                api_key: "",
+                api_key_masked: typeof provider.api_key_masked === "string" ? provider.api_key_masked : "",
+                has_api_key: Boolean(provider.has_api_key)
+            };
+        });
+        return drafts;
+    }
+
+    async function refreshProviderState() {
+        state.loading.providers = true;
+        render();
+
+        try {
+            var results = await Promise.all([fetchProviders(), fetchAgentConfig()]);
+            state.providers = results[0];
+            state.providerDrafts = buildProviderDrafts(state.providers);
+            state.agentConfigDraft = deepClone(results[1]);
+        } finally {
+            state.loading.providers = false;
+            render();
+        }
+    }
+
+    function updateProviderDraftField(providerName, field, value) {
+        if (!providerName || !state.providerDrafts[providerName]) {
+            return;
+        }
+        state.providerDrafts[providerName][field] = value;
+    }
+
+    function updateAgentModelField(modelKind, field, value) {
+        if (!state.agentConfigDraft || !modelKind || !state.agentConfigDraft[modelKind]) {
+            return;
+        }
+        state.agentConfigDraft[modelKind][field] = value;
+    }
+
+    async function createProvider() {
+        if (state.loading.providerSave) {
+            return;
+        }
+
+        var name = String(state.newProviderDraft.name || "").trim();
+        if (!name) {
+            setMessage("请输入 provider name。", "warning");
+            return;
+        }
+
+        state.loading.providerSave = true;
+        setMessage("正在创建 provider...", "info");
+        render();
+
+        try {
+            await apiFetch("/providers", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name: name,
+                    base_url: state.newProviderDraft.base_url,
+                    api_key: state.newProviderDraft.api_key
+                })
+            });
+            state.newProviderDraft = {
+                name: "",
+                base_url: "",
+                api_key: ""
+            };
+            await refreshProviderState();
+            await reloadAgentAfterConfigChange("Provider 已创建，agent 已重载。");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "创建 provider 失败"), "error");
+        } finally {
+            state.loading.providerSave = false;
+            render();
+        }
+    }
+
+    async function saveProvider(providerName) {
+        if (state.loading.providerSave || !providerName || !state.providerDrafts[providerName]) {
+            return;
+        }
+
+        var draft = state.providerDrafts[providerName];
+        var payload = {
+            base_url: draft.base_url
+        };
+        if (draft.api_key !== "") {
+            payload.api_key = draft.api_key;
+        }
+
+        state.loading.providerSave = true;
+        setMessage("正在保存 provider: " + providerName, "info");
+        render();
+
+        try {
+            await apiFetch("/providers/" + encodeURIComponent(providerName), {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+            await refreshProviderState();
+            await reloadAgentAfterConfigChange("Provider 已更新，agent 已重载。");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "更新 provider 失败"), "error");
+        } finally {
+            state.loading.providerSave = false;
+            render();
+        }
+    }
+
+    async function deleteProvider(providerName) {
+        if (state.loading.providerSave || !providerName) {
+            return;
+        }
+
+        state.loading.providerSave = true;
+        setMessage("正在删除 provider: " + providerName, "info");
+        render();
+
+        try {
+            await apiFetch("/providers/" + encodeURIComponent(providerName), {
+                method: "DELETE"
+            });
+            await refreshProviderState();
+            await reloadAgentAfterConfigChange("Provider 已删除，agent 已重载。");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "删除 provider 失败"), "error");
+        } finally {
+            state.loading.providerSave = false;
+            render();
+        }
+    }
+
+    async function saveAgentConfig() {
+        if (state.loading.agentConfigSave || !state.agentConfigDraft) {
+            return;
+        }
+
+        state.loading.agentConfigSave = true;
+        setMessage("正在保存 agent 模型配置...", "info");
+        render();
+
+        try {
+            await apiFetch("/config/agent", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    chat_model: {
+                        llm_provider: state.agentConfigDraft.chat_model.llm_provider,
+                        llm_model_name: state.agentConfigDraft.chat_model.llm_model_name
+                    },
+                    vision_model: {
+                        llm_provider: state.agentConfigDraft.vision_model.llm_provider,
+                        llm_model_name: state.agentConfigDraft.vision_model.llm_model_name
+                    }
+                })
+            });
+            await refreshProviderState();
+            await reloadAgentAfterConfigChange("Agent 模型配置已保存，agent 已重载。");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "保存 agent 模型配置失败"), "error");
+        } finally {
+            state.loading.agentConfigSave = false;
+            render();
+        }
+    }
+
+    async function reloadAgentAfterConfigChange(successMessage) {
+        try {
+            await apiFetch("/agent/reload", {
+                method: "POST"
+            });
+            setMessage(successMessage, "success");
+        } catch (reloadError) {
+            setMessage("配置已保存，但 agent 重载失败: " + getErrorMessage(reloadError, "reload failed"), "warning");
+        }
     }
 
     function pickDefaultProfile(profiles) {
@@ -601,6 +825,22 @@
                 actionEl.getAttribute("data-field"),
                 parseFieldPath(actionEl.getAttribute("data-field-path"))
             );
+            return;
+        }
+        if (action === "create-provider") {
+            createProvider();
+            return;
+        }
+        if (action === "save-provider") {
+            saveProvider(actionEl.getAttribute("data-provider-name"));
+            return;
+        }
+        if (action === "delete-provider") {
+            deleteProvider(actionEl.getAttribute("data-provider-name"));
+            return;
+        }
+        if (action === "save-agent-config") {
+            saveAgentConfig();
         }
     }
 
@@ -609,6 +849,11 @@
 
         if (target.id === "profileSelect") {
             loadProfile(target.value, false);
+            return;
+        }
+
+        if (target.matches("[data-action='update-agent-provider']")) {
+            updateAgentModelField(target.getAttribute("data-model-kind"), "llm_provider", target.value);
             return;
         }
 
@@ -663,6 +908,36 @@
 
     function handleInput(event) {
         var target = event.target;
+        if (target.matches("[data-action='update-new-provider-name']")) {
+            state.newProviderDraft.name = target.value;
+            return;
+        }
+
+        if (target.matches("[data-action='update-new-provider-base-url']")) {
+            state.newProviderDraft.base_url = target.value;
+            return;
+        }
+
+        if (target.matches("[data-action='update-new-provider-api-key']")) {
+            state.newProviderDraft.api_key = target.value;
+            return;
+        }
+
+        if (target.matches("[data-action='update-provider-base-url']")) {
+            updateProviderDraftField(target.getAttribute("data-provider-name"), "base_url", target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-provider-api-key']")) {
+            updateProviderDraftField(target.getAttribute("data-provider-name"), "api_key", target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-agent-model-name']")) {
+            updateAgentModelField(target.getAttribute("data-model-kind"), "llm_model_name", target.value);
+            return;
+        }
+
         if (target.matches("[data-field-type='str']")) {
             updateSchemaValue(
                 target.getAttribute("data-plugin-id"),
@@ -1073,6 +1348,10 @@
             panelEl.innerHTML = renderPluginsTab();
             return;
         }
+        if (state.activeTab === "providers") {
+            panelEl.innerHTML = renderProvidersTab();
+            return;
+        }
         panelEl.innerHTML = renderMarketTab();
     }
 
@@ -1120,6 +1399,11 @@
 
         if (state.activeTab === "plugins") {
             topbarMetaEl.textContent = state.plugins.length + " installed plugin(s)";
+            return;
+        }
+
+        if (state.activeTab === "providers") {
+            topbarMetaEl.textContent = state.providers.length + " configured provider(s)";
             return;
         }
 
@@ -1770,6 +2054,150 @@
             "  </div>",
             "</div></article>"
         ].join("");
+    }
+
+    function renderProvidersTab() {
+        if (state.loading.boot) {
+            return renderPlaceholder("正在读取 Providers", "等待 `/admin/api/providers` 和 `/admin/api/config/agent` 返回结果...");
+        }
+
+        return [
+            '<div class="plugins-grid">',
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>LLM Providers</h3>",
+            '        <p class="muted">维护 `lab.toml` 中的 `[[agent.llm.providers]]`，保存后自动触发 agent reload。</p>',
+            "      </div>",
+            "    </div>",
+            renderProviderCreateCard(),
+            renderProviderList(),
+            "  </div></section>",
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>Agent Models</h3>",
+            '        <p class="muted">为 Chat Model 和 Vision Model 选择 provider，并填写模型名。</p>',
+            "      </div>",
+            "    </div>",
+            renderAgentConfigCard(),
+            "  </div></section>",
+            "</div>"
+        ].join("");
+    }
+
+    function renderProviderCreateCard() {
+        var disabled = state.loading.providerSave ? "disabled" : "";
+        return [
+            '    <section class="field stack">',
+            '      <div class="field-top"><div class="field-title">新增 Provider</div></div>',
+            '      <div class="fields">',
+            '        <input class="input" type="text" placeholder="name" data-action="update-new-provider-name" value="' + escapeAttribute(displayInputValue(state.newProviderDraft.name)) + '" />',
+            '        <input class="input" type="text" placeholder="https://api.example.com/v1" data-action="update-new-provider-base-url" value="' + escapeAttribute(displayInputValue(state.newProviderDraft.base_url)) + '" />',
+            '        <input class="input" type="password" placeholder="api key" data-action="update-new-provider-api-key" value="' + escapeAttribute(displayInputValue(state.newProviderDraft.api_key)) + '" />',
+            "      </div>",
+            '      <div class="row">',
+            '        <button class="button is-primary" type="button" data-action="create-provider" ' + disabled + ">创建并重载</button>",
+            '        <div class="field-meta">name 必填；base_url 和 api_key 可稍后修改。</div>',
+            "      </div>",
+            "    </section>"
+        ].join("");
+    }
+
+    function renderProviderList() {
+        if (!state.providers.length) {
+            return '<div class="empty-copy">还没有 provider，先创建一个 provider，然后再为 chat / vision model 选择它。</div>';
+        }
+
+        return [
+            '    <div class="stack">',
+            state.providers.map(function (provider) {
+                return renderProviderCard(provider);
+            }).join(""),
+            "    </div>"
+        ].join("");
+    }
+
+    function renderProviderCard(provider) {
+        var draft = state.providerDrafts[provider.name] || {
+            name: provider.name,
+            base_url: provider.base_url || "",
+            api_key: "",
+            api_key_masked: provider.api_key_masked || "",
+            has_api_key: Boolean(provider.has_api_key)
+        };
+        var disabled = state.loading.providerSave ? "disabled" : "";
+
+        return [
+            '    <section class="field stack">',
+            '      <div class="field-top">',
+            "        <div>",
+            '          <div class="field-title">' + escapeHtml(provider.name) + "</div>",
+            '          <p class="field-desc">当前 API Key：' + escapeHtml(provider.api_key_masked || "未设置") + "</p>",
+            "        </div>",
+            '        <div class="badges">',
+            '          <span class="badge is-muted">' + escapeHtml(provider.name) + "</span>",
+            '          <span class="badge ' + (provider.has_api_key ? "is-success" : "is-warning") + '">' + (provider.has_api_key ? "key set" : "no key") + "</span>",
+            "        </div>",
+            "      </div>",
+            '      <div class="fields">',
+            '        <input class="input" type="text" data-action="update-provider-base-url" data-provider-name="' + escapeAttribute(provider.name) + '" value="' + escapeAttribute(displayInputValue(draft.base_url)) + '" />',
+            '        <input class="input" type="password" data-action="update-provider-api-key" data-provider-name="' + escapeAttribute(provider.name) + '" placeholder="留空则保持当前 key" value="' + escapeAttribute(displayInputValue(draft.api_key)) + '" />',
+            "      </div>",
+            '      <div class="row">',
+            '        <button class="button is-primary" type="button" data-action="save-provider" data-provider-name="' + escapeAttribute(provider.name) + '" ' + disabled + ">保存并重载</button>",
+            '        <button class="button is-subtle is-danger" type="button" data-action="delete-provider" data-provider-name="' + escapeAttribute(provider.name) + '" ' + disabled + ">删除</button>",
+            "      </div>",
+            "    </section>"
+        ].join("");
+    }
+
+    function renderAgentConfigCard() {
+        if (!state.agentConfigDraft) {
+            return '<div class="empty-copy">正在读取 Agent 配置，请稍候。</div>';
+        }
+
+        var disabled = state.loading.agentConfigSave ? "disabled" : "";
+
+        return [
+            renderAgentModelEditor("chat_model", "Chat Model", state.agentConfigDraft.chat_model),
+            renderAgentModelEditor("vision_model", "Vision Model", state.agentConfigDraft.vision_model),
+            '    <div class="row">',
+            '      <button class="button is-primary" type="button" data-action="save-agent-config" ' + disabled + ">" + (state.loading.agentConfigSave ? "保存中..." : "保存并重载") + "</button>",
+            '      <div class="field-meta">provider 选项来自 `/admin/api/providers`。</div>',
+            "    </div>"
+        ].join("");
+    }
+
+    function renderAgentModelEditor(modelKind, label, config) {
+        return [
+            '    <section class="field stack">',
+            '      <div class="field-top"><div class="field-title">' + escapeHtml(label) + "</div></div>",
+            '      <div class="fields">',
+            '        <div>',
+            '          <label class="label">Provider</label>',
+            '          <select class="select" data-action="update-agent-provider" data-model-kind="' + escapeAttribute(modelKind) + '">',
+            renderProviderOptions(config.llm_provider),
+            "          </select>",
+            "        </div>",
+            '        <div>',
+            '          <label class="label">Model Name</label>',
+            '          <input class="input" type="text" data-action="update-agent-model-name" data-model-kind="' + escapeAttribute(modelKind) + '" value="' + escapeAttribute(displayInputValue(config.llm_model_name)) + '" />',
+            "        </div>",
+            "      </div>",
+            "    </section>"
+        ].join("");
+    }
+
+    function renderProviderOptions(selectedName) {
+        if (!state.providers.length) {
+            return '<option value="">No providers available</option>';
+        }
+
+        return state.providers.map(function (provider) {
+            var selected = provider.name === selectedName ? " selected" : "";
+            return '<option value="' + escapeAttribute(provider.name) + '"' + selected + ">" + escapeHtml(provider.name) + "</option>";
+        }).join("");
     }
 
     function renderMarketTab() {
