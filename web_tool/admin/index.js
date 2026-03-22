@@ -224,10 +224,33 @@
         return Object.prototype.hasOwnProperty.call(obj, key) ? Boolean(obj[key]) : defaultVal;
     }
 
+    function normalizeEmotionDraft(value) {
+        if (isPlainObject(value)) {
+            return {
+                path: typeof value.path === "string" ? value.path : "",
+                ref_text: typeof value.ref_text === "string" ? value.ref_text : ""
+            };
+        }
+        if (typeof value === "string") {
+            return {
+                path: value,
+                ref_text: ""
+            };
+        }
+        return {
+            path: "",
+            ref_text: ""
+        };
+    }
+
     function normalizeCharacterTtsDraft(ttsDraft) {
         var nextDraft = isPlainObject(ttsDraft) ? deepClone(ttsDraft) : {};
         if (!isPlainObject(nextDraft.emotions)) {
-            nextDraft.emotions = { "default": "emotions/neutral.wav" };
+            nextDraft.emotions = { "default": { path: "emotions/neutral.wav", ref_text: "" } };
+        } else {
+            Object.keys(nextDraft.emotions).forEach(function (key) {
+                nextDraft.emotions[key] = normalizeEmotionDraft(nextDraft.emotions[key]);
+            });
         }
         if (typeof nextDraft.character_name !== "string") {
             nextDraft.character_name = "";
@@ -623,8 +646,13 @@
             return;
         }
 
-        if (target.matches("[data-action='update-emotion-value']")) {
-            updateTtsEmotionValue(target.getAttribute("data-key"), target.value);
+        if (target.matches("[data-action='update-emotion-path']")) {
+            updateTtsEmotionPath(target.getAttribute("data-key"), target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-emotion-ref-text']")) {
+            updateTtsEmotionRefText(target.getAttribute("data-key"), target.value);
             return;
         }
 
@@ -936,7 +964,9 @@
         var emotions = ensureCharacterDraft(state.selectedProfileDraft).tts.emotions;
         var previousKey = typeof oldKey === "string" ? oldKey : "";
         var nextKey = typeof newKey === "string" ? newKey : "";
-        var currentValue = Object.prototype.hasOwnProperty.call(emotions, previousKey) ? emotions[previousKey] : "";
+        var currentValue = Object.prototype.hasOwnProperty.call(emotions, previousKey)
+            ? normalizeEmotionDraft(emotions[previousKey])
+            : normalizeEmotionDraft(null);
 
         if (previousKey === nextKey) {
             return;
@@ -948,12 +978,29 @@
         render();
     }
 
-    function updateTtsEmotionValue(key, value) {
+    function updateTtsEmotionPath(key, value) {
         if (!state.selectedProfileDraft) {
             return;
         }
-        ensureCharacterDraft(state.selectedProfileDraft).tts.emotions[typeof key === "string" ? key : ""] = value;
+        var emotionKey = typeof key === "string" ? key : "";
+        var emotions = ensureCharacterDraft(state.selectedProfileDraft).tts.emotions;
+        var emotion = normalizeEmotionDraft(emotions[emotionKey]);
+        emotion.path = value;
+        emotions[emotionKey] = emotion;
         setMessage("\u5df2\u66f4\u65b0 character.tts.emotions \u7684 wav \u8def\u5f84\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
+        render();
+    }
+
+    function updateTtsEmotionRefText(key, value) {
+        if (!state.selectedProfileDraft) {
+            return;
+        }
+        var emotionKey = typeof key === "string" ? key : "";
+        var emotions = ensureCharacterDraft(state.selectedProfileDraft).tts.emotions;
+        var emotion = normalizeEmotionDraft(emotions[emotionKey]);
+        emotion.ref_text = value;
+        emotions[emotionKey] = emotion;
+        setMessage("\u5df2\u66f4\u65b0 character.tts.emotions \u7684 ref_text\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
         render();
     }
 
@@ -963,7 +1010,7 @@
         }
         var emotions = ensureCharacterDraft(state.selectedProfileDraft).tts.emotions;
         if (!Object.prototype.hasOwnProperty.call(emotions, "")) {
-            emotions[""] = "";
+            emotions[""] = normalizeEmotionDraft(null);
         }
         setMessage("\u5df2\u65b0\u589e\u4e00\u884c character.tts.emotions\uff0c\u4fdd\u5b58\u540e\u751f\u6548\u3002", "info");
         render();
@@ -1176,11 +1223,15 @@
     }
 
     function renderEmotionRow(key, value) {
+        var emotion = normalizeEmotionDraft(value);
         return [
-            '        <div class="row" data-emotion-key="' + escapeAttribute(key) + '">',
+            '        <div class="stack" data-emotion-key="' + escapeAttribute(key) + '">',
+            '          <div class="row">',
             '          <input class="input" type="text" placeholder="鎯呯华鍚?" data-action="update-emotion-key" data-old-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(key)) + '" />',
-            '          <input class="input grow" type="text" placeholder="emotions/neutral.wav" data-action="update-emotion-value" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(value)) + '" />',
+            '          <input class="input grow" type="text" placeholder="emotions/neutral.wav" data-action="update-emotion-path" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(emotion.path)) + '" />',
             '          <button class="button is-subtle is-danger" type="button" data-action="remove-emotion" data-key="' + escapeAttribute(key) + '">鍒犻櫎</button>',
+            "          </div>",
+            '          <input class="input" type="text" placeholder="ref_text (optional)" data-action="update-emotion-ref-text" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(emotion.ref_text)) + '" />',
             "        </div>"
         ].join("");
     }
@@ -1226,11 +1277,15 @@
     }
 
     function renderEmotionRowSafe(key, value) {
+        var emotion = normalizeEmotionDraft(value);
         return [
-            '        <div class="row" data-emotion-key="' + escapeAttribute(key) + '">',
+            '        <div class="stack" data-emotion-key="' + escapeAttribute(key) + '">',
+            '          <div class="row">',
             '          <input class="input" type="text" placeholder="\u60c5\u7eea\u540d" data-action="update-emotion-key" data-old-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(key)) + '" />',
-            '          <input class="input grow" type="text" placeholder="emotions/neutral.wav" data-action="update-emotion-value" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(value)) + '" />',
+            '          <input class="input grow" type="text" placeholder="emotions/neutral.wav" data-action="update-emotion-path" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(emotion.path)) + '" />',
             '          <button class="button is-subtle is-danger" type="button" data-action="remove-emotion" data-key="' + escapeAttribute(key) + '">\u5220\u9664</button>',
+            "          </div>",
+            '          <input class="input" type="text" placeholder="ref_text\uff08\u53ef\u4e3a\u7a7a\uff09" data-action="update-emotion-ref-text" data-key="' + escapeAttribute(key) + '" value="' + escapeAttribute(displayInputValue(emotion.ref_text)) + '" />',
             "        </div>"
         ].join("");
     }
@@ -1339,7 +1394,7 @@
             '        <div class="section-title">',
             "          <div>",
             '            <div class="field-title">emotions</div>',
-            '            <p class="field-desc">\u60c5\u7eea\u540d\u5230 wav \u8def\u5f84\u7684\u6620\u5c04\uff0c\u8def\u5f84\u76f8\u5bf9\u4e8e `models/gptsovits/&lt;character_name&gt;/`\u3002</p>',
+            '            <p class="field-desc">\u60c5\u7eea\u540d\u5bf9\u5e94 path \u4e0e ref_text\uff0cpath \u76f8\u5bf9\u4e8e `models/gptsovits/&lt;character_name&gt;/`\uff0cref_text \u53ef\u4e3a\u7a7a\uff0c\u7a7a\u65f6\u4e0d\u4f20\u3002</p>',
             "          </div>",
             '          <div class="section-actions">',
             '            <button class="button" type="button" data-action="add-tts-emotion">+ \u6dfb\u52a0\u60c5\u7eea</button>',
