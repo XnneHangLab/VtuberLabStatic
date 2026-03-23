@@ -3,44 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XnneHangLab Admin</title>
-    <link rel="stylesheet" href="./index.css">
+    <title>XnneHangLab Lab Config</title>
+    <link rel="stylesheet" href="../admin/index.css">
 </head>
-<body>
+<body data-initial-tab="providers">
     <div id="appShell" class="shell">
         <aside class="sidebar">
             <div class="brand">
                 <p class="brand-kicker">XnneHangLab</p>
-                <h1>Admin</h1>
-                <p class="brand-copy">Offline plugin and profile management.</p>
+                <h1>Lab Config</h1>
+                <p class="brand-copy">Structured `lab.toml` editing with section navigation.</p>
             </div>
-            <nav class="tabs" aria-label="Admin tabs">
-                <button class="tab-button is-active" type="button" data-tab="profiles">Profiles</button>
-                <button class="tab-button" type="button" data-tab="plugins">Plugins</button>
-                <button class="tab-button" type="button" data-tab="market">Market</button>
-                <button class="tab-button" type="button" data-tab="providers">Lab Config</button>
+            <nav class="tabs" aria-label="Lab config tabs">
+                <button class="tab-button is-active" type="button" data-tab="providers">Lab Config</button>
             </nav>
             <div class="sidebar-foot">
                 <p>Static page only.</p>
-                <p>No framework. No CDN.</p>
+                <p>Save `lab.toml`, then restart `just server` for non-agent changes.</p>
             </div>
         </aside>
         <main class="main">
             <header class="topbar">
                 <div>
-                    <h2 id="panelTitle">Profiles</h2>
+                    <h2 id="panelTitle">Lab Config</h2>
                 </div>
                 <div class="topbar-actions">
                     <button id="adminSidebarToggle" class="button sidebar-toggle" type="button" aria-pressed="false">
-                        隐藏 Admin 侧栏
+                        Toggle Sidebar
                     </button>
                     <button id="profileSidebarToggle" class="button sidebar-toggle" type="button" aria-pressed="false">
-                        隐藏 Profile 侧栏
+                        Profile Sidebar N/A
                     </button>
                     <button id="themeToggle" class="button theme-toggle" type="button" aria-pressed="false">
-                        切换到夜间模式
+                        Toggle Theme
                     </button>
-                    <div class="topbar-meta" id="topbarMeta">Loading admin data...</div>
+                    <div class="topbar-meta" id="topbarMeta">Loading lab config...</div>
                 </div>
             </header>
             <section id="globalMessage" class="message is-hidden" aria-live="polite"></section>
@@ -48,6 +45,6 @@
         </main>
     </div>
 
-    <script src="./index.js?v=20260323-lab-config-raw-editor"></script>
+    <script src="../admin/index.js?v=20260323-lab-config-route"></script>
 </body>
 </html>

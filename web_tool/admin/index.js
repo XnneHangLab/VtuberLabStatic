@@ -2,11 +2,20 @@
     "use strict";
 
     var API_BASE = window.location.origin + "/admin/api";
+    var DEFAULT_TAB = document.body.getAttribute("data-initial-tab") || "profiles";
     var state = {
-        activeTab: "profiles",
+        activeTab: DEFAULT_TAB,
         plugins: [],
         profiles: [],
         providers: [],
+        labConfigForm: {
+            sections: [],
+            values: {}
+        },
+        labConfigRaw: {
+            path: "",
+            content: ""
+        },
         pluginMap: {},
         selectedProfileName: "",
         selectedProfileRaw: null,
@@ -23,7 +32,8 @@
             activePluginId: "",
             collapsedPlugins: {},
             adminSidebarCollapsed: false,
-            profileSidebarCollapsed: false
+            profileSidebarCollapsed: false,
+            rawLabConfigExpanded: false
         },
         loading: {
             boot: false,
@@ -32,7 +42,8 @@
             reload: false,
             providers: false,
             providerSave: false,
-            agentConfigSave: false
+            agentConfigSave: false,
+            labConfigSave: false
         }
     };
 
@@ -67,11 +78,20 @@
         setMessage("正在加载 Profiles 和 Plugins...", "info");
         render();
 
-        var results = await Promise.allSettled([fetchPlugins(), fetchProfiles(), fetchProviders(), fetchAgentConfig()]);
+        var results = await Promise.allSettled([
+            fetchPlugins(),
+            fetchProfiles(),
+            fetchProviders(),
+            fetchAgentConfig(),
+            fetchLabConfigForm(),
+            fetchLabConfigRaw()
+        ]);
         var pluginsResult = results[0];
         var profilesResult = results[1];
         var providersResult = results[2];
         var agentConfigResult = results[3];
+        var labConfigFormResult = results[4];
+        var labConfigRawResult = results[5];
 
         if (pluginsResult.status === "fulfilled") {
             state.plugins = pluginsResult.value;
@@ -97,6 +117,18 @@
             state.agentConfigDraft = deepClone(agentConfigResult.value);
         } else {
             setMessage(getErrorMessage(agentConfigResult.reason, "加载 agent 配置失败"), "error");
+        }
+
+        if (labConfigFormResult.status === "fulfilled") {
+            state.labConfigForm = deepClone(labConfigFormResult.value);
+        } else {
+            setMessage(getErrorMessage(labConfigFormResult.reason, "Failed to load lab config form"), "error");
+        }
+
+        if (labConfigRawResult.status === "fulfilled") {
+            state.labConfigRaw = deepClone(labConfigRawResult.value);
+        } else {
+            setMessage(getErrorMessage(labConfigRawResult.reason, "Failed to load lab.toml"), "error");
         }
 
         state.loading.boot = false;
@@ -131,6 +163,14 @@
 
     async function fetchAgentConfig() {
         return apiFetch("/config/agent");
+    }
+
+    async function fetchLabConfigForm() {
+        return apiFetch("/config/lab/form");
+    }
+
+    async function fetchLabConfigRaw() {
+        return apiFetch("/config/lab/raw");
     }
 
     async function loadProfile(name, silent) {
@@ -243,12 +283,96 @@
         render();
 
         try {
-            var results = await Promise.all([fetchProviders(), fetchAgentConfig()]);
+            var results = await Promise.all([fetchProviders(), fetchAgentConfig(), fetchLabConfigForm(), fetchLabConfigRaw()]);
             state.providers = results[0];
             state.providerDrafts = buildProviderDrafts(state.providers);
             state.agentConfigDraft = deepClone(results[1]);
+            state.labConfigForm = deepClone(results[2]);
+            state.labConfigRaw = deepClone(results[3]);
         } finally {
             state.loading.providers = false;
+            render();
+        }
+    }
+
+    async function reloadLabConfigRaw() {
+        if (state.loading.labConfigSave) {
+            return;
+        }
+
+        state.loading.labConfigSave = true;
+        setMessage("Reloading lab.toml from disk...", "info");
+        render();
+
+        try {
+            await refreshProviderState();
+            setMessage("Reloaded lab.toml from disk.", "success");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "Failed to reload lab.toml"), "error");
+        } finally {
+            state.loading.labConfigSave = false;
+            render();
+        }
+    }
+
+    async function saveRawLabConfig() {
+        if (state.loading.labConfigSave) {
+            return;
+        }
+
+        state.loading.labConfigSave = true;
+        setMessage("Saving lab.toml...", "info");
+        render();
+
+        try {
+            await apiFetch("/config/lab/raw", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    content: state.labConfigRaw.content
+                })
+            });
+            await refreshProviderState();
+            setMessage("lab.toml saved. Restart `just server` manually if non-agent services need the new config.", "success");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "Failed to save lab.toml"), "error");
+        } finally {
+            state.loading.labConfigSave = false;
+            render();
+        }
+    }
+
+    async function saveLabConfigForm() {
+        if (state.loading.labConfigSave) {
+            return;
+        }
+
+        state.loading.labConfigSave = true;
+        setMessage("Saving lab.toml...", "info");
+        render();
+
+        try {
+            var response = await apiFetch("/config/lab/form", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    values: state.labConfigForm.values
+                })
+            });
+            state.labConfigForm = deepClone({
+                sections: response.sections,
+                values: response.values
+            });
+            await refreshProviderState();
+            setMessage("lab.toml saved. Restart `just server` manually if non-agent services need the new config.", "success");
+        } catch (error) {
+            setMessage(getErrorMessage(error, "Failed to save lab.toml"), "error");
+        } finally {
+            state.loading.labConfigSave = false;
             render();
         }
     }
@@ -265,6 +389,121 @@
             return;
         }
         state.agentConfigDraft[modelKind][field] = value;
+    }
+
+    function parsePathData(raw) {
+        if (!raw) {
+            return [];
+        }
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function coerceLabInputValue(rawValue, kind) {
+        if (kind === "integer") {
+            var intValue = rawValue === "" ? 0 : parseInt(rawValue, 10);
+            return Number.isNaN(intValue) ? 0 : intValue;
+        }
+        if (kind === "number") {
+            var floatValue = rawValue === "" ? 0 : parseFloat(rawValue);
+            return Number.isNaN(floatValue) ? 0 : floatValue;
+        }
+        return rawValue;
+    }
+
+    function getLabConfigValue(path) {
+        var current = state.labConfigForm.values;
+        path.forEach(function (segment) {
+            if (current !== null && typeof current !== "undefined") {
+                current = current[segment];
+            }
+        });
+        return current;
+    }
+
+    function updateLabConfigValue(path, value) {
+        if (!path.length) {
+            return;
+        }
+
+        var cursor = state.labConfigForm.values;
+        for (var i = 0; i < path.length - 1; i += 1) {
+            cursor = cursor[path[i]];
+        }
+        cursor[path[path.length - 1]] = value;
+    }
+
+    function addLabArrayItem(path) {
+        var items = getLabConfigValue(path);
+        var schema = findLabSchemaByPath(path);
+        if (!Array.isArray(items) || !schema || !schema.item) {
+            return;
+        }
+        items.push(deepClone(schema.item.default));
+        render();
+    }
+
+    function removeLabArrayItem(path) {
+        if (!path.length) {
+            return;
+        }
+
+        var index = path[path.length - 1];
+        var listPath = path.slice(0, -1);
+        var items = getLabConfigValue(listPath);
+        if (!Array.isArray(items)) {
+            return;
+        }
+        items.splice(index, 1);
+        render();
+    }
+
+    function jumpToLabSection(sectionKey) {
+        var target = document.getElementById("lab-section-" + sectionKey);
+        if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    }
+
+    function findLabSchemaByPath(path) {
+        function walk(schema, targetPath) {
+            if (!schema) {
+                return null;
+            }
+
+            if (deepEqual(schema.path, targetPath)) {
+                return schema;
+            }
+
+            if (schema.kind === "object" && Array.isArray(schema.fields)) {
+                for (var i = 0; i < schema.fields.length; i += 1) {
+                    var foundObject = walk(schema.fields[i], targetPath);
+                    if (foundObject) {
+                        return foundObject;
+                    }
+                }
+            }
+
+            if (schema.kind === "array" && schema.item) {
+                var foundItem = walk(schema.item, targetPath);
+                if (foundItem) {
+                    return foundItem;
+                }
+            }
+
+            return null;
+        }
+
+        for (var i = 0; i < state.labConfigForm.sections.length; i += 1) {
+            var found = walk(state.labConfigForm.sections[i], path);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
     }
 
     async function createProvider() {
@@ -850,6 +1089,35 @@
         }
         if (action === "save-agent-config") {
             saveAgentConfig();
+            return;
+        }
+        if (action === "save-lab-config-form") {
+            saveLabConfigForm();
+            return;
+        }
+        if (action === "toggle-raw-lab-config") {
+            state.ui.rawLabConfigExpanded = !state.ui.rawLabConfigExpanded;
+            render();
+            return;
+        }
+        if (action === "jump-lab-section") {
+            jumpToLabSection(actionEl.getAttribute("data-section-key"));
+            return;
+        }
+        if (action === "add-array-item") {
+            addLabArrayItem(parsePathData(actionEl.getAttribute("data-path")));
+            return;
+        }
+        if (action === "remove-array-item") {
+            removeLabArrayItem(parsePathData(actionEl.getAttribute("data-path")));
+            return;
+        }
+        if (action === "reload-raw-lab-config") {
+            reloadLabConfigRaw();
+            return;
+        }
+        if (action === "save-raw-lab-config") {
+            saveRawLabConfig();
         }
     }
 
@@ -863,6 +1131,16 @@
 
         if (target.matches("[data-action='update-agent-provider']")) {
             updateAgentModelField(target.getAttribute("data-model-kind"), "llm_provider", target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-lab-enum']")) {
+            updateLabConfigValue(parsePathData(target.getAttribute("data-path")), target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-lab-boolean']")) {
+            updateLabConfigValue(parsePathData(target.getAttribute("data-path")), target.checked);
             return;
         }
 
@@ -954,6 +1232,19 @@
 
         if (target.matches("[data-action='update-agent-model-name']")) {
             updateAgentModelField(target.getAttribute("data-model-kind"), "llm_model_name", target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-lab-value']")) {
+            updateLabConfigValue(
+                parsePathData(target.getAttribute("data-path")),
+                coerceLabInputValue(target.value, target.getAttribute("data-value-kind"))
+            );
+            return;
+        }
+
+        if (target.matches("[data-action='update-raw-lab-config']")) {
+            state.labConfigRaw.content = target.value;
             return;
         }
 
@@ -1368,7 +1659,7 @@
             return;
         }
         if (state.activeTab === "providers") {
-            panelEl.innerHTML = renderProvidersTab();
+            panelEl.innerHTML = renderLabConfigTab();
             return;
         }
         panelEl.innerHTML = renderMarketTab();
@@ -1414,7 +1705,7 @@
     }
 
     function renderTopbar() {
-        panelTitleEl.textContent = capitalize(state.activeTab);
+        panelTitleEl.textContent = state.activeTab === "providers" ? "Lab Config" : capitalize(state.activeTab);
 
         if (adminSidebarToggleEl) {
             adminSidebarToggleEl.textContent = state.ui.adminSidebarCollapsed ? "显示 Admin 侧栏" : "隐藏 Admin 侧栏";
@@ -1454,7 +1745,7 @@
         }
 
         if (state.activeTab === "providers") {
-            topbarMetaEl.textContent = state.providers.length + " configured provider(s)";
+            topbarMetaEl.textContent = state.providers.length + " configured provider(s) | full lab.toml editor ready";
             return;
         }
 
@@ -2137,6 +2428,43 @@
         ].join("");
     }
 
+    function renderLabConfigTab() {
+        if (state.loading.boot) {
+            return renderPlaceholder(
+                "Loading Lab Config",
+                "Waiting for `/admin/api/providers`, `/admin/api/config/agent`, `/admin/api/config/lab/form`, and `/admin/api/config/lab/raw`..."
+            );
+        }
+
+        return [
+            '<div class="stack">',
+            '<div class="plugins-grid">',
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>LLM Providers</h3>",
+            '        <p class="muted">Manage `[[agent.llm.providers]]` and keep provider names aligned with model selection.</p>',
+            "      </div>",
+            "    </div>",
+            renderProviderCreateCard(),
+            renderProviderList(),
+            "  </div></section>",
+            '  <section class="card"><div class="card-body stack">',
+            '    <div class="section-title">',
+            "      <div>",
+            "        <h3>Agent Models</h3>",
+            '        <p class="muted">Choose the provider and model name used by chat and vision requests.</p>',
+            "      </div>",
+            "    </div>",
+            renderAgentConfigCard(),
+            "  </div></section>",
+            "</div>",
+            renderStructuredLabConfigCard(),
+            renderRawLabConfigCard(),
+            "</div>"
+        ].join("");
+    }
+
     function renderProviderCreateCard() {
         var disabled = state.loading.providerSave ? "disabled" : "";
         return [
@@ -2252,6 +2580,235 @@
             var selected = provider.name === selectedName ? " selected" : "";
             return '<option value="' + escapeAttribute(provider.name) + '"' + selected + ">" + escapeHtml(provider.name) + "</option>";
         }).join("");
+    }
+
+    function renderStructuredLabConfigCard() {
+        var disabled = state.loading.labConfigSave ? "disabled" : "";
+        var sections = state.labConfigForm.sections || [];
+
+        if (!sections.length) {
+            return '<section class="card"><div class="card-body"><p class="empty-copy">Lab config schema is still loading.</p></div></section>';
+        }
+
+        return [
+            '<section class="card"><div class="card-body stack">',
+            '  <div class="section-title">',
+            "    <div>",
+            "      <h3>Structured Lab Config</h3>",
+            '      <p class="muted">Every top-level section is parsed into fields with title and description. Saving here writes `lab.toml` only; restart `just server` manually for non-agent services.</p>',
+            "    </div>",
+            "  </div>",
+            '  <div class="lab-config-layout">',
+            renderLabConfigNav(sections),
+            renderLabConfigSections(sections),
+            "  </div>",
+            '  <div class="row">',
+            '    <button class="button is-primary" type="button" data-action="save-lab-config-form" ' + disabled + ">Save lab.toml only</button>",
+            '    <div class="field-meta">`Agent Models` and `LLM Providers` above can still save and reload the agent separately.</div>',
+            "  </div>",
+            "</div></section>"
+        ].join("");
+    }
+
+    function renderLabConfigNav(sections) {
+        return [
+            '<aside class="lab-nav">',
+            '  <div class="lab-nav-title">Sections</div>',
+            sections.map(function (section) {
+                return '<button class="lab-nav-link" type="button" data-action="jump-lab-section" data-section-key="' +
+                    escapeAttribute(section.key) + '">' + escapeHtml(section.title || section.key) + "</button>";
+            }).join(""),
+            "</aside>"
+        ].join("");
+    }
+
+    function renderLabConfigSections(sections) {
+        return [
+            '<div class="lab-sections stack">',
+            sections.map(function (section) {
+                return renderLabSection(section);
+            }).join(""),
+            "</div>"
+        ].join("");
+    }
+
+    function renderLabSection(section) {
+        return [
+            '<section id="lab-section-' + escapeAttribute(section.key) + '" class="field stack lab-section">',
+            '  <div class="field-top">',
+            "    <div>",
+            '      <div class="field-title">' + escapeHtml(section.title || section.key) + "</div>",
+            (section.description ? '<p class="field-desc">' + escapeHtml(section.description) + "</p>" : ""),
+            "    </div>",
+            "  </div>",
+            renderLabObjectFields(section.fields || []),
+            "</section>"
+        ].join("");
+    }
+
+    function renderLabObjectFields(fields) {
+        return fields.map(function (field) {
+            return renderLabField(field, field.path);
+        }).join("");
+    }
+
+    function renderLabField(field, path) {
+        var value = getLabConfigValue(path);
+
+        if (field.kind === "object") {
+            return [
+                '<section class="nested-field stack">',
+                '  <div class="nested-field-head">',
+                '    <div class="field-title">' + escapeHtml(field.title || field.key) + "</div>",
+                "  </div>",
+                (field.description ? '<p class="field-desc">' + escapeHtml(field.description) + "</p>" : ""),
+                renderLabObjectFields(field.fields || []),
+                "</section>"
+            ].join("");
+        }
+
+        if (field.kind === "array") {
+            return renderLabArrayField(field, path, value);
+        }
+
+        return renderLabScalarField(field, path, value);
+    }
+
+    function renderLabScalarField(field, path, value) {
+        var pathData = escapeAttribute(safeJsonStringify(path));
+        var title = escapeHtml(field.title || field.key);
+        var description = field.description ? '<p class="field-desc">' + escapeHtml(field.description) + "</p>" : "";
+
+        if (field.kind === "boolean") {
+            return [
+                '<section class="field stack">',
+                '  <div class="field-top"><div class="field-title">' + title + "</div></div>",
+                description,
+                '  <label class="toggle"><input type="checkbox" data-action="update-lab-boolean" data-path="' + pathData + '"' +
+                    (value ? " checked" : "") + ' /><span>' + (value ? "Enabled" : "Disabled") + "</span></label>",
+                "</section>"
+            ].join("");
+        }
+
+        if (field.kind === "enum") {
+            return [
+                '<section class="field stack">',
+                '  <div class="field-top"><div class="field-title">' + title + "</div></div>",
+                description,
+                '  <select class="select" data-action="update-lab-enum" data-path="' + pathData + '">',
+                (field.options || []).map(function (option) {
+                    return '<option value="' + escapeAttribute(option.value) + '"' +
+                        (String(option.value) === String(value) ? " selected" : "") + ">" +
+                        escapeHtml(option.label) + "</option>";
+                }).join(""),
+                "  </select>",
+                "</section>"
+            ].join("");
+        }
+
+        var inputType = field.kind === "integer" || field.kind === "number" ? "number" : "text";
+        return [
+            '<section class="field stack">',
+            '  <div class="field-top"><div class="field-title">' + title + "</div></div>",
+            description,
+            '  <input class="input" type="' + inputType + '" data-action="update-lab-value" data-value-kind="' +
+                escapeAttribute(field.kind) + '" data-path="' + pathData + '" value="' +
+                escapeAttribute(displayInputValue(value)) + '" />',
+            "</section>"
+        ].join("");
+    }
+
+    function renderLabArrayField(field, path, value) {
+        var items = Array.isArray(value) ? value : [];
+        var pathData = escapeAttribute(safeJsonStringify(path));
+
+        return [
+            '<section class="field stack">',
+            '  <div class="field-top"><div class="field-title">' + escapeHtml(field.title || field.key) + "</div></div>",
+            (field.description ? '<p class="field-desc">' + escapeHtml(field.description) + "</p>" : ""),
+            '  <div class="row">',
+            '    <button class="button" type="button" data-action="add-array-item" data-path="' + pathData + '">Add item</button>',
+            '    <div class="field-meta">' + items.length + " item(s)</div>",
+            "  </div>",
+            items.length ? renderLabArrayItems(field, path, items) : '<div class="empty-copy">No items yet.</div>',
+            "</section>"
+        ].join("");
+    }
+
+    function renderLabArrayItems(field, path, items) {
+        return [
+            '<div class="list-items">',
+            items.map(function (item, index) {
+                return renderLabArrayItem(field, path, item, index);
+            }).join(""),
+            "</div>"
+        ].join("");
+    }
+
+    function renderLabArrayItem(field, path, item, index) {
+        var itemPath = path.concat([index]);
+        var itemPathData = escapeAttribute(safeJsonStringify(itemPath));
+
+        return [
+            '<section class="list-item-card stack">',
+            '  <div class="list-item-head">',
+            '    <h5>Item ' + (index + 1) + "</h5>",
+            '    <button class="button is-subtle is-danger" type="button" data-action="remove-array-item" data-path="' + itemPathData + '">Remove</button>',
+            "  </div>",
+            renderLabArrayItemBody(field.item, itemPath, item),
+            "</section>"
+        ].join("");
+    }
+
+    function renderLabArrayItemBody(itemSchema, itemPath, item) {
+        if (itemSchema.kind === "object") {
+            return (itemSchema.fields || []).map(function (childField) {
+                var childPath = itemPath.concat([childField.key]);
+                return renderLabField(childField, childPath);
+            }).join("");
+        }
+
+        var wrapperField = {
+            key: String(itemPath[itemPath.length - 1]),
+            path: itemPath,
+            title: itemSchema.title || "Value",
+            description: itemSchema.description || "",
+            kind: itemSchema.kind,
+            options: itemSchema.options || []
+        };
+        return renderLabScalarField(wrapperField, itemPath, item);
+    }
+
+    function renderRawLabConfigCard() {
+        var disabled = state.loading.labConfigSave ? "disabled" : "";
+        var pathLabel = state.labConfigRaw && state.labConfigRaw.path ? state.labConfigRaw.path : "config/lab.toml";
+        var expanded = Boolean(state.ui.rawLabConfigExpanded);
+
+        return [
+            '<section class="card"><div class="card-body stack">',
+            '  <div class="section-title">',
+            "    <div>",
+            "      <h3>Advanced: Raw lab.toml</h3>",
+            '      <p class="muted">Use this only for fields the structured UI does not cover yet.</p>',
+            "    </div>",
+            '    <div class="row">',
+            '      <div class="badges"><span class="badge is-muted">' + escapeHtml(pathLabel) + "</span></div>",
+            '      <button class="button" type="button" data-action="toggle-raw-lab-config">' +
+                (expanded ? "Collapse" : "Expand") + "</button>",
+            "    </div>",
+            "  </div>",
+            (expanded ? [
+                '  <textarea class="textarea is-code" data-action="update-raw-lab-config" spellcheck="false">' +
+                    escapeHtml(displayInputValue(state.labConfigRaw.content)) +
+                    "</textarea>",
+                '  <div class="row">',
+                '    <button class="button" type="button" data-action="reload-raw-lab-config" ' + disabled + ">Reload from disk</button>",
+                '    <button class="button is-primary" type="button" data-action="save-raw-lab-config" ' + disabled + ">Save lab.toml only</button>",
+                '    <div class="field-meta">Advanced fallback editor. Saving here does not reload ASR/TTS services; restart `just server` manually if needed.</div>',
+                "  </div>"
+            ].join("") : '<div class="field-meta">Hidden by default to reduce accidental edits. Expand only when the structured sections are not enough.</div>'),
+            "</div></section>"
+        ].join("");
     }
 
     function renderMarketTab() {

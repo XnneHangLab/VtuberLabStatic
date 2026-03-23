@@ -335,6 +335,11 @@ textarea:disabled {
     line-height: 1.5;
 }
 
+.textarea.is-code {
+    min-height: 520px;
+    line-height: 1.6;
+}
+
 .textarea.is-invalid {
     border-color: rgba(255, 123, 123, 0.55);
 }
@@ -736,6 +741,56 @@ body[data-theme="day"] .list-item-card {
     gap: 16px;
 }
 
+.lab-config-layout {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.lab-nav {
+    position: sticky;
+    top: 18px;
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 14px;
+    background: var(--meta-background);
+    border: 1px solid var(--meta-border);
+}
+
+.lab-nav-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+}
+
+.lab-nav-link {
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.lab-nav-link:hover,
+.lab-nav-link:focus-visible {
+    border-color: var(--border);
+    background: var(--hover-background);
+    color: var(--text);
+}
+
+.lab-sections {
+    min-width: 0;
+}
+
+.lab-section {
+    scroll-margin-top: 18px;
+}
+
 .plugin-info-card {
     display: grid;
     gap: 14px;
@@ -804,7 +859,15 @@ body[data-theme="day"] .list-item-card {
         grid-template-columns: 1fr;
     }
 
+    .lab-config-layout {
+        grid-template-columns: 1fr;
+    }
+
     .plugin-outline {
+        position: static;
+    }
+
+    .lab-nav {
         position: static;
     }
 
