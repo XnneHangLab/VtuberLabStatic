@@ -16,7 +16,8 @@
         newProviderDraft: {
             name: "",
             base_url: "",
-            api_key: ""
+            api_key: "",
+            api_format: "chat_completion"
         },
         ui: {
             activePluginId: "",
@@ -52,13 +53,15 @@
     state.ui.profileSidebarCollapsed = loadBooleanPreference(PROFILE_SIDEBAR_STORAGE_KEY, false);
     applyTheme(loadThemePreference());
     applyLayoutState();
-    initialize();
 
     document.addEventListener("click", handleClick);
     document.addEventListener("change", handleChange);
     document.addEventListener("input", handleInput);
 
     syncTabFromHash();
+    window.addEventListener("hashchange", handleHashChange);
+    render();
+    initialize();
     async function initialize() {
         state.loading.boot = true;
         setMessage("正在加载 Profiles 和 Plugins...", "info");
@@ -227,6 +230,7 @@
                 name: provider.name,
                 base_url: typeof provider.base_url === "string" ? provider.base_url : "",
                 api_key: "",
+                api_format: typeof provider.api_format === "string" ? provider.api_format : "chat_completion",
                 api_key_masked: typeof provider.api_key_masked === "string" ? provider.api_key_masked : "",
                 has_api_key: Boolean(provider.has_api_key)
             };
@@ -287,13 +291,15 @@
                 body: JSON.stringify({
                     name: name,
                     base_url: state.newProviderDraft.base_url,
-                    api_key: state.newProviderDraft.api_key
+                    api_key: state.newProviderDraft.api_key,
+                    api_format: state.newProviderDraft.api_format
                 })
             });
             state.newProviderDraft = {
                 name: "",
                 base_url: "",
-                api_key: ""
+                api_key: "",
+                api_format: "chat_completion"
             };
             await refreshProviderState();
             await reloadAgentAfterConfigChange("Provider 已创建，agent 已重载。");
@@ -312,7 +318,8 @@
 
         var draft = state.providerDrafts[providerName];
         var payload = {
-            base_url: draft.base_url
+            base_url: draft.base_url,
+            api_format: draft.api_format
         };
         if (draft.api_key !== "") {
             payload.api_key = draft.api_key;
@@ -925,6 +932,11 @@
             return;
         }
 
+        if (target.matches("[data-action='update-new-provider-api-format']")) {
+            state.newProviderDraft.api_format = target.value;
+            return;
+        }
+
         if (target.matches("[data-action='update-provider-base-url']")) {
             updateProviderDraftField(target.getAttribute("data-provider-name"), "base_url", target.value);
             return;
@@ -932,6 +944,11 @@
 
         if (target.matches("[data-action='update-provider-api-key']")) {
             updateProviderDraftField(target.getAttribute("data-provider-name"), "api_key", target.value);
+            return;
+        }
+
+        if (target.matches("[data-action='update-provider-api-format']")) {
+            updateProviderDraftField(target.getAttribute("data-provider-name"), "api_format", target.value);
             return;
         }
 
@@ -1375,6 +1392,14 @@
         });
         if (hasTab) {
             state.activeTab = hash;
+        }
+    }
+
+    function handleHashChange() {
+        var previousTab = state.activeTab;
+        syncTabFromHash();
+        if (state.activeTab !== previousTab) {
+            render();
         }
     }
 
@@ -2120,6 +2145,7 @@
             '      <div class="fields">',
             '        <input class="input" type="text" placeholder="name" data-action="update-new-provider-name" value="' + escapeAttribute(displayInputValue(state.newProviderDraft.name)) + '" />',
             '        <input class="input" type="text" placeholder="https://api.example.com/v1" data-action="update-new-provider-base-url" value="' + escapeAttribute(displayInputValue(state.newProviderDraft.base_url)) + '" />',
+            '        <select class="select" data-action="update-new-provider-api-format"><option value="chat_completion"' + (state.newProviderDraft.api_format === "chat_completion" ? " selected" : "") + '>chat_completion</option></select>',
             '        <input class="input" type="password" placeholder="api key" data-action="update-new-provider-api-key" value="' + escapeAttribute(displayInputValue(state.newProviderDraft.api_key)) + '" />',
             "      </div>",
             '      <div class="row">',
@@ -2149,6 +2175,7 @@
             name: provider.name,
             base_url: provider.base_url || "",
             api_key: "",
+            api_format: provider.api_format || "chat_completion",
             api_key_masked: provider.api_key_masked || "",
             has_api_key: Boolean(provider.has_api_key)
         };
@@ -2168,6 +2195,7 @@
             "      </div>",
             '      <div class="fields">',
             '        <input class="input" type="text" data-action="update-provider-base-url" data-provider-name="' + escapeAttribute(provider.name) + '" value="' + escapeAttribute(displayInputValue(draft.base_url)) + '" />',
+            '        <select class="select" data-action="update-provider-api-format" data-provider-name="' + escapeAttribute(provider.name) + '"><option value="chat_completion"' + (draft.api_format === "chat_completion" ? " selected" : "") + '>chat_completion</option></select>',
             '        <input class="input" type="password" data-action="update-provider-api-key" data-provider-name="' + escapeAttribute(provider.name) + '" placeholder="留空则保持当前 key" value="' + escapeAttribute(displayInputValue(draft.api_key)) + '" />',
             "      </div>",
             '      <div class="row">',
