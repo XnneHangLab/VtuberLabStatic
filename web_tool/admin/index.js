@@ -58,6 +58,7 @@
     document.addEventListener("change", handleChange);
     document.addEventListener("input", handleInput);
 
+    syncTabFromHash();
     async function initialize() {
         state.loading.boot = true;
         setMessage("正在加载 Profiles 和 Plugins...", "info");
@@ -757,6 +758,7 @@
         var tabButton = event.target.closest("[data-tab]");
         if (tabButton) {
             state.activeTab = tabButton.getAttribute("data-tab");
+            updateLocationHash();
             render();
             return;
         }
@@ -1360,6 +1362,30 @@
             var isActive = button.getAttribute("data-tab") === state.activeTab;
             button.classList.toggle("is-active", isActive);
         });
+    }
+
+    function syncTabFromHash() {
+        var hash = String(window.location.hash || "").replace(/^#/, "");
+        if (!hash) {
+            return;
+        }
+
+        var hasTab = tabButtons.some(function (button) {
+            return button.getAttribute("data-tab") === hash;
+        });
+        if (hasTab) {
+            state.activeTab = hash;
+        }
+    }
+
+    function updateLocationHash() {
+        if (!state.activeTab) {
+            return;
+        }
+        if (window.location.hash === "#" + state.activeTab) {
+            return;
+        }
+        window.location.hash = state.activeTab;
     }
 
     function renderTopbar() {
