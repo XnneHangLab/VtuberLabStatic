@@ -821,6 +821,14 @@
         return "";
     }
 
+    function isOpaqueObjectSchema(fieldSchema) {
+        if (!fieldSchema || fieldSchema.type !== "object") {
+            return false;
+        }
+        var properties = isPlainObject(fieldSchema.properties) ? fieldSchema.properties : {};
+        return Object.keys(properties).length === 0;
+    }
+
     function createUnknownPluginDefinition(pluginId) {
         return {
             id: pluginId,
@@ -958,6 +966,9 @@
         if (schemaField.type === "object") {
             var properties = isPlainObject(schemaField.properties) ? schemaField.properties : {};
             var source = isPlainObject(value) ? value : {};
+            if (isOpaqueObjectSchema(schemaField)) {
+                return deepClone(source);
+            }
             var nextObject = {};
             Object.keys(properties).forEach(function (key) {
                 nextObject[key] = normalizeSchemaValueForSave(source[key], properties[key]);
@@ -1265,6 +1276,26 @@
                 target.value,
                 parseFieldPath(target.getAttribute("data-field-path"))
             );
+            return;
+        }
+
+        if (target.matches("[data-field-type='json-object']")) {
+            try {
+                var parsed = target.value.trim() ? JSON.parse(target.value) : {};
+                if (!isPlainObject(parsed)) {
+                    throw new Error("JSON root must be an object");
+                }
+                target.classList.remove("is-invalid");
+                updateSchemaValue(
+                    target.getAttribute("data-plugin-id"),
+                    target.getAttribute("data-field"),
+                    parsed,
+                    parseFieldPath(target.getAttribute("data-field-path"))
+                );
+            } catch (error) {
+                target.classList.add("is-invalid");
+                setMessage(getErrorMessage(error, "对象字段 JSON 解析失败"), "error");
+            }
         }
     }
 
@@ -2212,9 +2243,15 @@
         var properties = isPlainObject(schemaField.properties) ? schemaField.properties : {};
         var objectValue = isPlainObject(currentValue) ? currentValue : emptyValueForSchemaField(schemaField);
         var keys = Object.keys(properties);
+        var pathAttr = escapeAttribute(JSON.stringify(path || []));
 
-        if (!keys.length) {
-            return '<div class="empty-copy">This object has no editable fields.</div>';
+        if (isOpaqueObjectSchema(schemaField)) {
+            return [
+                '<div class="stack">',
+                '  <textarea class="textarea compact-textarea" data-field-type="json-object" data-plugin-id="' + escapeAttribute(pluginId) + '" data-field="' + escapeAttribute(field) + '" data-field-path="' + pathAttr + '">' + escapeHtml(safeJsonStringify(objectValue)) + "</textarea>",
+                '  <div class="note">This object uses dynamic keys, so the admin shows it as raw JSON and preserves it on save.</div>',
+                "</div>"
+            ].join("");
         }
 
         return [
