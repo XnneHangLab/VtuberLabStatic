@@ -717,7 +717,7 @@
     function normalizeCharacterTtsDraft(ttsDraft) {
         var nextDraft = isPlainObject(ttsDraft) ? deepClone(ttsDraft) : {};
         if (!isPlainObject(nextDraft.emotions)) {
-            nextDraft.emotions = { "default": { path: "emotions/neutral.wav", ref_text: "" } };
+            nextDraft.emotions = {};
         } else {
             Object.keys(nextDraft.emotions).forEach(function (key) {
                 nextDraft.emotions[key] = normalizeEmotionDraft(nextDraft.emotions[key]);
